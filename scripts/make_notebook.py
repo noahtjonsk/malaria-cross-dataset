@@ -844,7 +844,7 @@ n_obj = sum(len(rec["objects"]) for jf in paths.BBBC041_JSON.values()
 assert int((man.dataset == "bbbc041").sum()) == n_obj
 print(f"[ok] BBBC041 rows == {n_obj:,} annotated objects")
 
-# 4. MP-IDB crops reproduce the dataset authors own parasite decomposition
+# 4. MP-IDB crops reproduce the dataset authors' own parasite decomposition
 n_checked = 0
 for sp in ["Falciparum", "Vivax"]:
     shipped = _shipped_stage_map(sp)
@@ -869,7 +869,7 @@ Falciparum and Vivax, and the two use different conventions: Falciparum crops ar
 background-masked and Vivax crops are not. All MP-IDB cells are therefore regenerated
 from the `gt/` masks under the same rule as BBBC041. The expert stage labels are
 preserved by matching left to right against the shipped crops, validated against
-the authors own decomposition on all 144 images that have one.
+the authors' own decomposition on all 144 images that have one.
 
 **The largest train/test difference is crop format, not imaging.** NIH cells are
 segmented onto black; about a quarter of every NIH crop is padding. That single

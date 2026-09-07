@@ -1,0 +1,20 @@
+# Versions this project was developed and last run against.
+# Install with:  pip install -r requirements.txt
+#
+# Anaconda already ships most of these; opencv-python, albumentations,
+# imagehash and papermill are the ones a bare Anaconda install lacks.
+
+numpy==2.3.5
+pandas==2.3.3
+matplotlib==3.10.6
+scikit-learn==1.7.2
+statsmodels==0.14.5
+
+opencv-python==4.13.0.92
+pillow==12.0.0
+ImageHash==4.3.2
+albumentations==2.0.8
+
+nbformat==5.10.4
+papermill==2.7.0
+tqdm==4.67.1
