@@ -1,0 +1,7 @@
+domain,AUC_all_features,AUC_appearance_only
+bbbc041/site_a,1.0,1.0
+bbbc041/site_b,1.0,1.0
+mpidb/Falciparum,1.0,1.0
+mpidb/Malariae,1.0,0.9998
+mpidb/Ovale,1.0,1.0
+mpidb/Vivax,1.0,1.0

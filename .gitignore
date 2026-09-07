@@ -1,0 +1,26 @@
+# Source datasets: downloaded, read-only, far too large to track.
+cell_images_NIH/
+malaria_BBBC041/
+MP-IDB-The-Malaria-Parasite-Image-Database-*/
+
+# Generated crops: ~87k files, rebuilt by scripts/build_crops.py
+data/crops/
+
+# Per-cell manifests are regenerated deterministically by build_crops.py.
+# nih_split.csv and mpidb_stage_audit.csv are NOT ignored: the split pins the
+# exact train/val/test rows every model must share, and the audit records where
+# each MP-IDB stage label came from.
+data/manifests/all_cells.csv
+data/manifests/bbbc041_cells.csv
+data/manifests/nih_cells.csv
+data/manifests/mpidb_cells.csv
+
+# 62 MB of per-image statistics, rebuilt by scripts/compute_stats.py
+outputs/tables/cell_stats.csv
+
+# Python and editor artefacts
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+.idea/
