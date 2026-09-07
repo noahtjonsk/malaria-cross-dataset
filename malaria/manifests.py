@@ -146,7 +146,8 @@ def build_bbbc041_manifest(write_crops: bool = True,
             for out, box, label, group, stage, i in planned:
                 if image is not None and not (skip_existing and out.exists()):
                     out.parent.mkdir(parents=True, exist_ok=True)
-                    cv2.imwrite(str(out), box.apply(image))
+                    if not cv2.imwrite(str(out), box.apply(image)):
+                        raise IOError(f"cv2.imwrite failed for {out}")
                 rows.append({
                     "dataset": "bbbc041", "source_split": split,
                     "cell_id": f"{stem}_{i}", "path": _rel(out),
@@ -261,7 +262,8 @@ def build_mpidb_manifest(write_crops: bool = True,
                 box = square_padded_box(r0, c0, r1, c1, ih, iw)
                 if image is not None and not (skip_existing and out.exists()):
                     out.parent.mkdir(parents=True, exist_ok=True)
-                    cv2.imwrite(str(out), box.apply(image))
+                    if not cv2.imwrite(str(out), box.apply(image)):
+                        raise IOError(f"cv2.imwrite failed for {out}")
                 rows.append({
                     "dataset": "mpidb", "source_split": species,
                     "cell_id": f"{species}_{stem}_{i}", "path": _rel(out),

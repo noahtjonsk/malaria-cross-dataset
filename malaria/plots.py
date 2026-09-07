@@ -50,6 +50,10 @@ def add_domain(df: pd.DataFrame) -> pd.DataFrame:
                       + df["source_split"].astype(str))
     present = [d for d in DOMAIN_ORDER if d in set(domain)]
     df["domain"] = pd.Categorical(domain, categories=present, ordered=True)
+    if bool(df["domain"].isna().any()):
+        missing = sorted(set(domain) - set(DOMAIN_ORDER))
+        raise ValueError(f"domains not listed in DOMAIN_ORDER: {missing}; "
+                         "add them there so no cell silently drops out")
     return df
 
 
@@ -131,7 +135,9 @@ def contact_sheet(rows, n: int = 8, size: int | None = None, seed: int = 0,
     rng = np.random.default_rng(seed)
     fig, axes = plt.subplots(len(rows), n,
                              figsize=(1.25 * n, 1.35 * len(rows)))
-    axes = np.atleast_2d(axes)
+    # reshape, not atleast_2d: with n == 1 and several rows, atleast_2d gives
+    # shape (1, m) and axes[1, 0] raises IndexError
+    axes = np.asarray(axes).reshape(len(rows), n)
     for ri, (label, sub) in enumerate(rows):
         take = (sub.sample(min(n, len(sub)), random_state=int(rng.integers(1_000_000)))
                 if sample else sub.iloc[:n])

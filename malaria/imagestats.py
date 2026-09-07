@@ -34,16 +34,24 @@ FEATURES = [
     "lapvar224", "lapvar_native",
     "black_frac", "black_frac_outer", "black_frac_center",
     "gray_mean_center", "gray_std_center", "lapvar224_center",
+    "r_mean_center", "g_mean_center", "b_mean_center",
+    "rb_diff_center", "sat_mean_center", "hue_mean_center",
 ]
 
-# Features restricted to the central disc, i.e. measured on tissue only.
-# NIH cells are segmented onto black, so roughly a quarter of every NIH crop is
-# padding sitting in the outer ring. Whole-crop brightness, contrast and
-# sharpness therefore describe that padding as much as the cell, and comparing
-# them across datasets compares crop format rather than imaging. The centre
+# Features measured on tissue only. NIH cells are segmented onto black, so
+# roughly a quarter of every NIH crop is padding. Whole-crop statistics
+# therefore describe that padding as much as the cell, and comparing them
+# across datasets compares crop format rather than imaging. The centre
 # variants are the honest cross-dataset comparison; the whole-crop ones remain
 # the right description of what the network is actually fed.
-CENTER_FEATURES = ["gray_mean_center", "gray_std_center", "lapvar224_center"]
+#
+# Two masks are used. The gray/sharpness variants use the central disc, which
+# is geometry-based. The colour variants use the tissue mask
+# (gray >= BLACK_LEVEL), because a black padding pixel contributes S=0, H=0
+# and R-B=0 and so dilutes every colour average on a masked crop.
+CENTER_FEATURES = ["gray_mean_center", "gray_std_center", "lapvar224_center",
+                   "r_mean_center", "g_mean_center", "b_mean_center",
+                   "rb_diff_center", "sat_mean_center", "hue_mean_center"]
 
 
 def _radial_masks(size: int):
@@ -72,10 +80,22 @@ def image_stats(path) -> dict:
     b, g, r = (small[..., i].astype(np.float32).mean() for i in range(3))
     dark = gray < BLACK_LEVEL
 
+    # Tissue mask for the colour features. Black padding contributes S=0, H=0
+    # and R-B=0, which dilutes every colour average on a masked NIH crop while
+    # leaving the unmasked test sets untouched: the same trap the _center
+    # variants fix for brightness and sharpness. Fall back to the whole crop
+    # if the mask degenerates (an almost entirely black image).
+    tissue = ~dark
+    if int(tissue.sum()) < 100:
+        tissue = np.ones_like(dark)
+    bt, gt, rt = (small[..., i].astype(np.float32)[tissue].mean()
+                  for i in range(3))
+
     return {
         "w": w, "h": h, "area": w * h, "aspect": w / h,
-        # how much interpolation this cell needs to reach the network input
-        "upscale_factor": n / max(w, h),
+        # how much interpolation this cell needs to reach the network input;
+        # the resize is to a square, so the SHORT side is the one stretched
+        "upscale_factor": n / min(w, h),
 
         "gray_mean": float(gray.mean()), "gray_std": float(gray.std()),
         "gray_p5": float(np.percentile(gray, 5)),
@@ -98,6 +118,13 @@ def image_stats(path) -> dict:
         "gray_mean_center": float(gray[_CENTER].mean()),
         "gray_std_center": float(gray[_CENTER].std()),
         "lapvar224_center": float(cv2.Laplacian(gray, cv2.CV_64F)[_CENTER].var()),
+
+        # tissue-only colour, masked on gray >= BLACK_LEVEL
+        "r_mean_center": float(rt), "g_mean_center": float(gt),
+        "b_mean_center": float(bt),
+        "rb_diff_center": float(rt - bt),
+        "sat_mean_center": float(hsv[..., 1][tissue].mean()),
+        "hue_mean_center": float(hsv[..., 0][tissue].mean()),
     }
 
 

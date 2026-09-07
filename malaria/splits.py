@@ -43,7 +43,7 @@ def patient_grouped_split(manifest: pd.DataFrame,
     # Shuffle first so ties among equally-sized patients break randomly, then
     # sort stably so the shuffle survives as the tie-break order.
     counts = counts.sample(frac=1.0, random_state=int(rng.integers(1_000_000)))
-    counts = counts.sort_values(ascending=False)
+    counts = counts.sort_values(ascending=False, kind="mergesort")  # stable sort
 
     total = int(counts.sum())
     targets = {n: f * total for n, f in zip(names, fractions)}

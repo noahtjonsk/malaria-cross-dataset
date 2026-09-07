@@ -201,7 +201,8 @@ neg = nih[nih.label_binary == 0].copy()
 neg["slide_type"] = np.where(neg.patient_id.isin(mixed_slides),
                              "negative from mixed slide",
                              "negative from uninfected-only slide")
-cols = ["gray_mean", "gray_std", "sat_mean", "rb_diff", "lapvar224", "black_frac"]
+cols = ["gray_mean_center", "gray_std_center", "sat_mean_center",
+        "rb_diff_center", "lapvar224_center", "black_frac"]
 print(neg.groupby("slide_type")[cols].median().round(2).to_string())
 print()
 print(neg["slide_type"].value_counts().to_string())
@@ -226,15 +227,17 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GroupKFold, cross_val_predict
 from sklearn.metrics import roc_auc_score
 
-COLOUR = ["r_mean", "g_mean", "b_mean", "rb_diff", "sat_mean", "hue_mean",
-          "gray_mean_center"]
+# Tissue-only colour, so the black-padding fraction cannot leak into the
+# prediction disguised as diluted colour.
+COLOUR = ["r_mean_center", "g_mean_center", "b_mean_center", "rb_diff_center",
+          "sat_mean_center", "hue_mean_center", "gray_mean_center"]
 
 def label_auc(df, feats=COLOUR):
     X = df[feats].to_numpy(float)
     y = df["label_binary"].to_numpy(int)
     g = df["patient_id"].astype(str).to_numpy()
     clf = RandomForestClassifier(n_estimators=300, min_samples_leaf=5,
-                                 n_jobs=-1, random_state=0)
+                                 n_jobs=4, random_state=0)  # bounded workers: keeps peak memory low, results identical
     p = cross_val_predict(clf, X, y, groups=g, cv=GroupKFold(n_splits=5),
                           method="predict_proba")[:, 1]
     return roc_auc_score(y, p)
@@ -248,16 +251,17 @@ print(f"  mixed slides only    AUC = {label_auc(mixed_only):.4f}   n = {len(mixe
 md("""
 Two things follow, and they point in different directions.
 
-The uninfected-only slides really do look different: saturation d = -1.12 and the
-red-minus-blue stain axis flips sign entirely. That is a large difference inside
-what is nominally one class.
+The uninfected-only slides really do look different: tissue saturation d = -1.17,
+and the stain axis flips sign entirely, at a median of +47 on mixed slides against
+-4 on the uninfected-only ones. That is a large difference inside what is
+nominally one class.
 
 But it is mostly not what makes the classes separable. Removing those slides
-barely moves the colour-only AUC (0.77 to 0.75), so the bulk of the colour signal
+barely moves the colour-only AUC (0.81 to 0.80), so the bulk of the colour signal
 comes from parasitised cells genuinely carrying stained parasite material, which
 is real morphology rather than a slide artefact. The honest reading is that NIH
 does not have a large slide-identity shortcut, but that a colour-only model still
-reaches about 0.77 AUC, so headline NIH accuracy should not be read as evidence
+reaches about 0.81 AUC, so headline NIH accuracy should not be read as evidence
 that a model has learned parasite morphology.
 
 The split is grouped by slide regardless, which costs nothing and removes the
@@ -332,7 +336,7 @@ for i0 in range(0, len(B), BLOCK):
     pairs += [(i0 + a, int(b), int(round(ham[a, b])))
               for a, b in zip(ii, jj) if b > i0 + a]
     del ham
-pairs = pd.DataFrame(pairs, columns=["i", "j", "d"])
+pairs = pd.DataFrame(pairs, columns=["i", "j", "d"]).astype(int)  # int even when empty
 
 sp = cells["split"].to_numpy()
 pt = cells["patient_id"].astype(str).to_numpy()
@@ -375,7 +379,8 @@ validation and test.
 md("""
 ## C. Size
 
-`upscale_factor` is the multiplier needed to reach the 224 px network input.
+`upscale_factor` is the multiplier needed to reach the 224 px network input,
+taken on the shorter side, since the square resize stretches that side hardest.
 Above 1 the image is being invented by interpolation, and a cell that arrives at
 4x upscale carries no more real detail than its original 55 px.
 """)
@@ -437,7 +442,8 @@ fig, _ = plots.feature_panels(
             "gray_mean_center", "gray_std_center"],
     titles={"gray_mean": "Brightness, whole crop",
             "gray_std": "Contrast, whole crop",
-            "r_mean": "Red channel mean", "b_mean": "Blue channel mean",
+            "r_mean": "Red channel mean, whole crop",
+            "b_mean": "Blue channel mean, whole crop",
             "gray_mean_center": "Brightness, tissue only",
             "gray_std_center": "Contrast, tissue only"},
     ncols=3)
@@ -456,16 +462,34 @@ md("""
 Giemsa stain puts parasite chromatin in the purple/blue range, so saturation and
 the red-minus-blue difference track the staining protocol and the white balance
 of the capture device.
+
+Like section D, this has to be read twice. A black padding pixel carries zero
+saturation, zero hue and zero red-minus-blue, so on NIH the whole-crop colour
+averages are diluted by the mask while the unpadded test sets are measured
+honestly. The tissue-only panels compare the staining itself, and they move NIH
+substantially: saturation rises from 45 to 65 and the stain axis from +29 to +42
+once the padding is excluded. One caveat on hue: OpenCV hue is circular and wraps
+at 180, and an arithmetic mean near the wrap is unreliable, so hue supports the
+coarse contrasts here rather than fine ones.
 """)
 
 code("""
 fig, _ = plots.feature_panels(
-    stats, ["sat_mean", "rb_diff", "hue_mean"],
-    titles={"sat_mean": "Saturation", "rb_diff": "Red - blue (stain axis)",
-            "hue_mean": "Hue"}, ncols=3)
+    stats, ["sat_mean", "rb_diff", "hue_mean",
+            "sat_mean_center", "rb_diff_center", "hue_mean_center"],
+    titles={"sat_mean": "Saturation, whole crop",
+            "rb_diff": "Red - blue, whole crop",
+            "hue_mean": "Hue, whole crop",
+            "sat_mean_center": "Saturation, tissue only",
+            "rb_diff_center": "Red - blue (stain axis), tissue only",
+            "hue_mean_center": "Hue, tissue only"},
+    ncols=3)
 plots.save(fig, "E_stain")
 
-print(stats.groupby("domain", observed=True)[["sat_mean", "rb_diff", "hue_mean"]]
+print("whole crop (network input) vs tissue only (the staining itself):")
+print(stats.groupby("domain", observed=True)
+      [["sat_mean", "sat_mean_center", "rb_diff", "rb_diff_center",
+        "hue_mean", "hue_mean_center"]]
       .median().round(2).to_string())
 """)
 
@@ -561,7 +585,9 @@ artefacts: the black padding (`black_frac_outer`, `gray_p5`) and native
 resolution (`lapvar_native`). Lighting and focus sit far below them. Once measured
 on tissue only, sharpness is nearly identical across all seven domains
 (`lapvar224_center`, largest |d| about 0.3) and contrast differences shrink by
-roughly sevenfold. What genuinely differs is colour and brightness.
+roughly sevenfold. What genuinely differs is colour and brightness: on tissue,
+brightness reaches |d| 3.8, the stain axis 2.6 and saturation 1.7, against a
+sharpness ceiling of 0.3.
 """)
 
 code("""
@@ -600,12 +626,18 @@ from sklearn.model_selection import GroupKFold, cross_val_predict
 from sklearn.metrics import roc_auc_score
 
 # Everything that encodes crop geometry or the segmentation mask is removed, so
-# the second AUC cannot be won just by noticing that NIH crops have black corners.
+# the second AUC cannot be won just by noticing that NIH crops have black
+# corners. That includes the whole-crop colour means: black pixels contribute
+# zero saturation and zero red-minus-blue, so on masked crops those means
+# encode the padding fraction almost as directly as black_frac itself. Only
+# the tissue-only variants survive.
 APPEARANCE_ONLY = [f for f in FEATURES if f not in
                    {"w", "h", "area", "aspect", "upscale_factor",
                     "black_frac", "black_frac_outer", "black_frac_center",
                     "lapvar_native", "gray_mean", "gray_std", "lapvar224",
-                    "gray_p5", "gray_p50", "gray_p95"}]
+                    "gray_p5", "gray_p50", "gray_p95",
+                    "r_mean", "g_mean", "b_mean", "rb_diff",
+                    "sat_mean", "hue_mean"}]
 print("appearance-only features:", APPEARANCE_ONLY)
 
 def domain_auc(target, features):
@@ -615,7 +647,7 @@ def domain_auc(target, features):
     groups = sub["source_image"].astype(str).to_numpy()
     n_splits = min(5, len(np.unique(groups)))
     clf = RandomForestClassifier(n_estimators=200, min_samples_leaf=5,
-                                 n_jobs=-1, random_state=0)
+                                 n_jobs=4, random_state=0)  # bounded workers: keeps peak memory low, results identical
     p = cross_val_predict(clf, X, y, groups=groups,
                           cv=GroupKFold(n_splits=n_splits),
                           method="predict_proba")[:, 1]
@@ -714,6 +746,10 @@ recs = []
 for name, (levels, make) in sweeps.items():
     for lv in levels:
         t = make(lv)
+        # Every transform carries its own random generator, seeded from entropy
+        # at construction. Pinning it makes the calibration table identical on
+        # every execution; the global random/numpy seeds do not reach it.
+        t.set_random_seed(0)
         out = [t(image=i)["image"] for i in imgs]
         recs.append({"degradation": name, "severity": lv, **measure(out)})
 sweep = pd.DataFrame(recs)
@@ -783,10 +819,10 @@ ranks them.
 md("""
 ## K. Summary table for the write-up
 
-Brightness, contrast and sharpness are the tissue-only measurements, for the
-reason given in section F: the whole-crop versions of all three describe the NIH
-segmentation mask rather than the imaging, and reverse the direction of the
-comparison.
+Brightness, contrast, sharpness, saturation and the stain axis are all tissue-only
+measurements, for the reason given in sections E and F: the whole-crop versions
+describe the NIH segmentation mask as much as the imaging, and reverse or dilute
+the comparison.
 """)
 
 code("""
@@ -796,8 +832,8 @@ summary = (stats.groupby("domain", observed=True)
                 upscale=("upscale_factor", "median"),
                 brightness=("gray_mean_center", "median"),
                 contrast=("gray_std_center", "median"),
-                saturation=("sat_mean", "median"),
-                stain_rb=("rb_diff", "median"),
+                saturation=("sat_mean_center", "median"),
+                stain_rb=("rb_diff_center", "median"),
                 sharpness=("lapvar224_center", "median"),
                 black_frac=("black_frac", "median"))
            .round(2))
@@ -854,11 +890,14 @@ for sp in ["Falciparum", "Vivax"]:
             n_checked += 1
 print(f"[ok] MP-IDB component counts match the shipped crops on {n_checked} images")
 
-# 5. no NIH slide spans two splits, and the classes stay balanced
+# 5. no NIH slide spans two splits. Class balance is reported rather than
+# asserted: the split balances cell counts per fold and balances labels only
+# as a byproduct, so a different seed could legitimately widen the spread.
 check_no_patient_leakage(nih_split)
 rates = nih_split.groupby("split", observed=True)["label_binary"].mean()
-assert rates.max() - rates.min() < 0.02, rates
-print("[ok] no slide leakage; class balance within 2 points across splits")
+spread = float(rates.max() - rates.min())
+note = "" if spread < 0.02 else "  [warning: above 2 points, check before training]"
+print(f"[ok] no slide leakage; parasitised-rate spread across splits {spread:.4f}{note}")
 """)
 
 md("""
@@ -873,18 +912,22 @@ the authors' own decomposition on all 144 images that have one.
 
 **The largest train/test difference is crop format, not imaging.** NIH cells are
 segmented onto black; about a quarter of every NIH crop is padding. That single
-fact dominates the ranked domain gap and inflates whole-crop brightness, contrast
-and sharpness enough to reverse all three comparisons.
+fact dominates the ranked domain gap, inflates whole-crop brightness, contrast
+and sharpness enough to reverse all three comparisons, and dilutes every
+whole-crop colour average the same way, which is why the colour numbers below are
+tissue-only.
 
-Colour is what genuinely separates the domains. The stain red-minus-blue axis runs
-from +43 (MP-IDB Falciparum) through +29 (NIH) to -24 (BBBC041 site_a), a sign
-reversal, and saturation and tissue brightness separate the domains cleanly. A
-cheap classifier tells any test domain from NIH at AUC 1.00 from colour and tissue
-features alone. Sharpness does the opposite: measured on tissue only it is nearly
-identical across all seven domains, at a largest |d| of about 0.3, and several
-test domains are sharper than NIH. That is why blur is the wrong axis for RQ2.
-The sub-question survives as a robustness probe, but it can no longer be described
-as simulating the cross-dataset shift.
+Colour is what genuinely separates the domains. Measured on tissue, the stain
+red-minus-blue axis puts NIH at +42, indistinguishable from MP-IDB Falciparum at
++43, while BBBC041 site_a sits at -24: a sign reversal between the training set
+and its largest test set. Saturation runs from 17 (site_b) to 77 (Falciparum)
+with NIH at 65, and tissue brightness separates the domains cleanly. A cheap
+classifier tells every test domain from NIH at AUC 0.998 or higher from tissue
+colour and brightness alone. Sharpness does the opposite: measured on tissue only
+it is nearly identical across all seven domains, at a largest |d| of about 0.3,
+and several test domains are sharper than NIH. That is why blur is the wrong axis
+for RQ2. The sub-question survives as a robustness probe, but it can no longer be
+described as simulating the cross-dataset shift.
 
 **BBBC041 is two datasets.** site_a and site_b differ from each other about as
 much as either differs from NIH, and are reported separately throughout.
@@ -951,7 +994,7 @@ the section that supports it.
 **Anomalies or unusual patterns.** The largest NIH-vs-test difference is crop
 format, not imaging: a quarter of every NIH crop is black padding, which inflates
 whole-crop brightness, contrast and sharpness enough to reverse all three
-comparisons (F, G). BBBC041 is two acquisition batches that differ as much from
+comparisons, and dilutes the whole-crop colour averages the same way (E, F, G). BBBC041 is two acquisition batches that differ as much from
 each other as from NIH (A, H). Fifty NIH patients contributed uninfected cells
 only, and those cells are visibly less saturated (B).
 
@@ -983,8 +1026,8 @@ sensitivity and specificity rather than accuracy on BBBC041 (M).
 
 **Data leakage risks.** Patient identity: removed by the grouped split and checked
 by assertion (B, L). Slide appearance as a label shortcut: tested and found small;
-colour alone reaches AUC 0.77 with or without the uninfected-only patients (B).
-Duplicates across splits: none (B).
+tissue colour alone reaches about AUC 0.81 with or without the uninfected-only
+patients (B). Duplicates across splits: none (B).
 
 **Overall quality and suitability.** Good for the main question and RQ1: three
 clean, labelled sources, 27,558 balanced training cells, and a domain shift that
@@ -1017,10 +1060,11 @@ are binary, come from a single expert slide reader (Rajaraman et al., 2018), and
 are taken as given; there is no second annotator to measure their noise against.
 
 **Spurious correlations.** The black background is the strongest gradient in an
-NIH image and is absent from every test set (G, H); a cheap classifier separates
-any test domain from NIH at AUC 1.0 from colour alone (H); colour alone predicts
-the NIH label at AUC 0.77, so headline NIH accuracy does not show that morphology
-was learned (B).
+NIH image, is absent from every test set, and dilutes whole-crop colour averages,
+so colour is compared tissue-only (E, G, H); a cheap classifier separates every
+test domain from NIH at AUC 0.998 or higher from tissue colour alone (H); tissue
+colour alone predicts the NIH label at about AUC 0.81, so headline NIH accuracy
+does not show that morphology was learned (B).
 
 **Does imbalance or volume call for augmentation?** Not for volume. For the
 measured shift, yes: hue, saturation and brightness augmentation in training is
