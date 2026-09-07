@@ -73,9 +73,12 @@ or MP-IDB. What differs is stain colour and tissue brightness.
 See section M of the notebook. In short: the largest NIH-vs-test difference is
 crop format, not imaging. NIH cells are segmented onto black and about a quarter
 of every NIH crop is padding, which inflates whole-crop brightness, contrast and
-sharpness enough to reverse all three comparisons. Measured on tissue only,
-sharpness is nearly identical across all seven domains, so blur is a poor proxy
-for the cross-dataset shift. What genuinely differs is stain colour.
+sharpness enough to reverse all three comparisons, and dilutes every whole-crop
+colour average the same way, so all colour comparisons are made tissue-only.
+Measured that way, sharpness is nearly identical across all seven domains, so
+blur is a poor proxy for the cross-dataset shift. What genuinely differs is
+stain colour and tissue brightness: NIH matches Falciparum on the stain axis,
+while BBBC041 flips its sign entirely.
 
 ## Canvas EDA questions
 
