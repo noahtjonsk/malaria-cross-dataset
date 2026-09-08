@@ -18,6 +18,10 @@ data/manifests/mpidb_cells.csv
 # 62 MB of per-image statistics, rebuilt by scripts/compute_stats.py
 outputs/tables/cell_stats.csv
 
+# Shareable HTML export, regenerated on demand with:
+#   python -m nbconvert --to html --output-dir outputs outputs/01_eda_run.ipynb
+outputs/01_eda_run.html
+
 # Python and editor artefacts
 __pycache__/
 *.pyc
