@@ -64,3 +64,5 @@ docs/methodology/*.run.xml
 docs/methodology/*.bbl
 docs/methodology/*.blg
 docs/methodology/*.out
+docs/methodology/MO_preview_not_final_style.pdf
+docs/methodology/*.zip
