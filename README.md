@@ -37,7 +37,12 @@ python scripts/pack_for_colab.py --variants masked reinhard histmatch
 python scripts/train.py --arch vgg16 --seed 0 --resume               # on Colab
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0                 # rq1/rq2/rq3 tables + R_ figure
+# D3 Methodology Overview (TinyTeX: pdflatex + biber, classicthesis like the lit review)
+python scripts/make_mo_figures.py
+cd docs/methodology && pdflatex mo && biber mo && pdflatex mo && pdflatex mo
 ```
+
+The ELSA checklist (D5, deon plus project items and mitigations) is `docs/elsa_checklist.md`.
 
 ## Where to look at the cells
 

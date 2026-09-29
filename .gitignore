@@ -66,3 +66,7 @@ docs/methodology/*.blg
 docs/methodology/*.out
 docs/methodology/MO_preview_not_final_style.pdf
 docs/methodology/*.zip
+docs/methodology/mo.pdf
+docs/methodology/*.fls
+docs/methodology/*.fdb_latexmk
+docs/methodology/*.toc
