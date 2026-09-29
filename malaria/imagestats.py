@@ -18,6 +18,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 from tqdm.auto import tqdm as _tqdm
 
 from . import paths
@@ -26,6 +27,14 @@ from . import paths
 # cells are segmented onto pure black, so the measure separates a masked crop
 # from an unmasked one; real stained tissue essentially never goes this dark.
 BLACK_LEVEL = 15
+
+# The brightness and sharpness measures are taken on the tissue interior: the
+# tissue mask eroded by this many pixels. Erosion matters for the Laplacian,
+# which reads a 3x3 neighbourhood, so a pixel sitting on the tissue boundary
+# still sees padding and returns the mask edge rather than the optics. Three
+# pixels clears that kernel with room to spare.
+TISSUE_ERODE_PX = 3
+_ERODE_KERNEL = np.ones((2 * TISSUE_ERODE_PX + 1,) * 2, np.uint8)
 
 FEATURES = [
     "w", "h", "area", "aspect", "upscale_factor",
@@ -45,10 +54,14 @@ FEATURES = [
 # variants are the honest cross-dataset comparison; the whole-crop ones remain
 # the right description of what the network is actually fed.
 #
-# Two masks are used. The gray/sharpness variants use the central disc, which
-# is geometry-based. The colour variants use the tissue mask
-# (gray >= BLACK_LEVEL), because a black padding pixel contributes S=0, H=0
-# and R-B=0 and so dilutes every colour average on a masked crop.
+# Two windows, for two different failure modes. Colour uses the tissue mask
+# (gray >= BLACK_LEVEL) over the whole crop, because a black padding pixel
+# contributes S=0, H=0 and R-B=0 and so dilutes every colour average on a masked
+# crop. Brightness and sharpness use the central disc intersected with that mask
+# eroded by TISSUE_ERODE_PX: the disc keeps the sampled region comparable across
+# datasets, the mask removes padding where a crop is small enough for it to
+# reach inside the disc, and the erosion keeps a neighbourhood filter off the
+# boundary.
 CENTER_FEATURES = ["gray_mean_center", "gray_std_center", "lapvar224_center",
                    "r_mean_center", "g_mean_center", "b_mean_center",
                    "rb_diff_center", "sat_mean_center", "hue_mean_center"]
@@ -62,6 +75,27 @@ def _radial_masks(size: int):
 
 
 _OUTER, _CENTER = _radial_masks(paths.MODEL_INPUT)
+
+
+def interior_mask(gray: np.ndarray) -> np.ndarray:
+    """The window the `_center` features are measured on.
+
+    The central disc intersected with the tissue mask, eroded so a
+    neighbourhood filter never reads across the padding boundary. Exposed
+    rather than inlined because the RQ2 sweep in section J has to measure
+    degraded crops the same way; if it used a different window its curve would
+    not be on the same scale as the reference lines it is compared against.
+    """
+    tissue = gray >= BLACK_LEVEL
+    if int(tissue.sum()) < 100:
+        tissue = np.ones_like(tissue)
+    eroded = cv2.erode(tissue.astype(np.uint8), _ERODE_KERNEL).astype(bool)
+    interior = eroded & _CENTER
+    for fallback in (eroded, tissue):          # tiny or oddly shaped crops
+        if int(interior.sum()) >= 100:
+            break
+        interior = fallback
+    return interior
 
 
 def image_stats(path) -> dict:
@@ -88,6 +122,24 @@ def image_stats(path) -> dict:
     tissue = ~dark
     if int(tissue.sum()) < 100:
         tissue = np.ones_like(dark)
+
+    # Window for the brightness and sharpness measures: the central disc
+    # intersected with the eroded tissue mask. Both halves are needed.
+    #
+    # The disc keeps the comparison like-for-like. Without it the window on an
+    # unmasked crop is the entire rectangle, neighbouring cells and background
+    # included, so NIH's single segmented cell would be compared against a whole
+    # field of view and the contrast difference would be image content rather
+    # than imaging.
+    #
+    # The eroded tissue mask removes the padding. NIH cells vary in size, so on
+    # about 7% of crops the padding reaches inside the disc, and the Laplacian
+    # then returns the mask edge: those crops score a median near 197 against
+    # about 6 for the rest, which inflates NIH's spread enough to make Cohen's d
+    # report no sharpness difference where one exists. Erosion is what makes it
+    # safe for a neighbourhood filter, which would otherwise read padding from a
+    # pixel sitting on the boundary.
+    interior = interior_mask(gray)
     bt, gt, rt = (small[..., i].astype(np.float32)[tissue].mean()
                   for i in range(3))
 
@@ -114,10 +166,13 @@ def image_stats(path) -> dict:
         "black_frac_outer": float(dark[_OUTER].mean()),
         "black_frac_center": float(dark[_CENTER].mean()),
 
-        # tissue-only versions of the three scale/format-sensitive measures
-        "gray_mean_center": float(gray[_CENTER].mean()),
-        "gray_std_center": float(gray[_CENTER].std()),
-        "lapvar224_center": float(cv2.Laplacian(gray, cv2.CV_64F)[_CENTER].var()),
+        # tissue-only versions of the three scale/format-sensitive measures.
+        # The `_center` suffix is kept for continuity with earlier runs; the
+        # window is the eroded tissue mask, not a central disc.
+        "gray_mean_center": float(gray[interior].mean()),
+        "gray_std_center": float(gray[interior].std()),
+        "lapvar224_center": float(
+            cv2.Laplacian(gray, cv2.CV_64F)[interior].var()),
 
         # tissue-only colour, masked on gray >= BLACK_LEVEL
         "r_mean_center": float(rt), "g_mean_center": float(gt),
@@ -162,17 +217,49 @@ def cohens_d(a: np.ndarray, b: np.ndarray) -> float:
     return float((a.mean() - b.mean()) / pooled) if pooled > 0 else np.nan
 
 
+def separation(a: np.ndarray, b: np.ndarray) -> float:
+    """Rank-based effect size: |2A - 1|, where A = P(a > b) over random pairs.
+
+    0 means the two samples are indistinguishable on this feature; 1 means a
+    single value tells them apart every time. Reported alongside `cohens_d`
+    because d is unreliable on several of these features: Laplacian variance is
+    heavily skewed, so one extreme crop inflates the pooled standard deviation
+    and d reports "no difference" where the distributions barely overlap. A
+    rank measure counts that crop once. It also needs no assumption about
+    distribution shape and no per-feature transformation, so rows of the gap
+    table stay comparable with each other, which a mix of logged and unlogged
+    features would not.
+
+    Numerically this is |2 * AUC - 1| for a one-feature classifier, the same
+    quantity section H already reports for the domain classifier.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+    if len(a) < 2 or len(b) < 2:
+        return np.nan
+    ranks = rankdata(np.concatenate([a, b]))
+    auc = (ranks[:len(a)].sum() - len(a) * (len(a) + 1) / 2) / (len(a) * len(b))
+    return float(abs(2 * auc - 1))
+
+
 def domain_gap_table(stats: pd.DataFrame, reference: str = "nih",
                      group_col: str = "domain",
-                     features=None) -> pd.DataFrame:
-    """Cohen's d for every feature, reference domain vs each other domain."""
+                     features=None, measure=None) -> pd.DataFrame:
+    """Effect size for every feature, reference domain vs each other domain.
+
+    `measure` defaults to `cohens_d`; pass `separation` for the rank-based
+    version. Section H reports both, because they disagree about which feature
+    separates the domains most and the disagreement is itself a finding.
+    """
+    measure = cohens_d if measure is None else measure
     features = list(FEATURES if features is None else features)
     ref = stats[stats[group_col] == reference]
     out = {}
     for name, grp in stats[stats[group_col] != reference].groupby(group_col,
                                                                  observed=True):
-        out[str(name)] = {f: cohens_d(np.asarray(grp[f]), np.asarray(ref[f]))
+        out[str(name)] = {f: measure(np.asarray(grp[f]), np.asarray(ref[f]))
                           for f in features}
     table = pd.DataFrame(out)
-    table["max_abs_d"] = table.abs().max(axis=1)
-    return table.sort_values("max_abs_d", ascending=False)
+    table["max_abs"] = table.abs().max(axis=1)
+    return table.sort_values("max_abs", ascending=False)

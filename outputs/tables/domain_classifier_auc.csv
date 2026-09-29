@@ -1,7 +1,7 @@
 domain,AUC_all_features,AUC_appearance_only
 bbbc041/site_a,1.0,1.0
 bbbc041/site_b,1.0,1.0
-mpidb/Falciparum,1.0,0.999
-mpidb/Malariae,1.0,0.9983
+mpidb/Falciparum,1.0,0.9991
+mpidb/Malariae,1.0,0.9992
 mpidb/Ovale,1.0,0.9995
 mpidb/Vivax,1.0,0.9994

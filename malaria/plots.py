@@ -14,15 +14,34 @@ import pandas as pd
 from . import paths
 
 # One colour per domain, used consistently across every figure.
-DOMAIN_ORDER = ["nih", "bbbc041/site_a", "bbbc041/site_b",
+DOMAIN_ORDER = ["nih", "nihpoly/polygon_masked", "nihpoly/polygon_raw",
+                "bbbc041/site_a", "bbbc041/site_b",
                 "mpidb/Falciparum", "mpidb/Malariae",
-                "mpidb/Ovale", "mpidb/Vivax"]
+                "mpidb/Ovale", "mpidb/Vivax",
+                # MP-IDB framed on the host red cell rather than the parasite
+                "mpidb_wholecell/Falciparum", "mpidb_wholecell/Malariae",
+                "mpidb_wholecell/Ovale", "mpidb_wholecell/Vivax",
+                # the test crops put into the NIH format (build_masked_crops.py)
+                "bbbc041_masked/site_a", "bbbc041_masked/site_b",
+                "mpidb_masked/Falciparum", "mpidb_masked/Malariae",
+                "mpidb_masked/Ovale", "mpidb_masked/Vivax",
+                "mpidb_wholecell_masked/Falciparum", "mpidb_wholecell_masked/Malariae",
+                "mpidb_wholecell_masked/Ovale", "mpidb_wholecell_masked/Vivax"]
 DOMAIN_COLORS = {
     "nih": "#1f77b4",
+    # the NIH cells recut from the photographs: light blue on black like
+    # cell_images, dark blue with the background kept like the test sets
+    "nihpoly/polygon_masked": "#aec7e8", "nihpoly/polygon_raw": "#393b79",
     "bbbc041/site_a": "#ff7f0e", "bbbc041/site_b": "#d62728",
     "mpidb/Falciparum": "#2ca02c", "mpidb/Malariae": "#8c564b",
     "mpidb/Ovale": "#9467bd", "mpidb/Vivax": "#17becf",
 }
+# a whole-cell or masked test domain is drawn in its original domain's colour
+DOMAIN_COLORS.update({d.replace("mpidb/", "mpidb_wholecell/", 1): c for d, c in
+                      list(DOMAIN_COLORS.items()) if d.startswith("mpidb/")})
+DOMAIN_COLORS.update({d.replace("/", "_masked/", 1): c for d, c in
+                      list(DOMAIN_COLORS.items()) if d.split("/")[0] in
+                      ("bbbc041", "mpidb", "mpidb_wholecell")})
 
 STAGE_ORDER = ["ring", "trophozoite", "schizont", "gametocyte", "unknown"]
 

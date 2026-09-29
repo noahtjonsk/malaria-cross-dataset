@@ -4,6 +4,7 @@ The notebook is generated rather than hand-edited so that it stays diffable and
 so the analysis code lives next to the module it calls. Re-run this script after
 changing the analysis, then execute the notebook with papermill.
 """
+import ast
 import sys
 from pathlib import Path
 
@@ -61,7 +62,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from malaria import paths, plots
-from malaria.imagestats import CENTER_FEATURES, FEATURES, domain_gap_table
+from malaria.imagestats import (CENTER_FEATURES, FEATURES,
+                                domain_gap_table, separation)
 from malaria.manifests import load_manifest
 from malaria.splits import (build_nih_split, check_no_patient_leakage,
                             split_summary)
@@ -431,8 +433,8 @@ These have to be read twice, because NIH cells are segmented onto a black
 background and roughly a quarter of every NIH crop is that padding. Whole-crop
 brightness and contrast therefore partly describe the padding rather than the
 cell. Both views are reported: the whole-crop numbers describe what the network
-is fed, and the `_center` numbers, restricted to the central disc, describe the
-imaging itself. The two disagree about NIH in opposite directions, so quoting
+is fed, and the `_center` numbers, taken on the central disc with any padding
+masked out, describe the imaging itself. The two disagree about NIH in opposite directions, so quoting
 only the first would put the wrong conclusion in the thesis.
 """)
 
@@ -505,11 +507,31 @@ There is a second and larger trap. Measured over the whole crop, NIH scores abou
 575 against 3 to 35 for every test domain, which reads as NIH being one to two
 orders of magnitude sharper. It is not. A Laplacian responds to any strong
 gradient, and the hard boundary between an NIH cell and its black background is
-the strongest gradient in the image. Restricted to the central disc, NIH scores
-about 6, below BBBC041 site_a and in the same range as the rest. site_b, the
-one JPEG domain, has the lowest tissue sharpness of all, and JPEG quantisation
-smooths exactly the fine gradients a Laplacian measures, so part of that floor may
-be compression rather than optics.
+the strongest gradient in the image.
+
+Removing it takes two things at once, and an earlier version of this analysis
+got it wrong in both directions. A central disc alone leaves the padding inside
+the window on the 7% of NIH crops whose cell is small enough for it to reach
+there; those crops scored a median near 197 against about 6 for the rest, which
+inflated NIH's spread enough to make Cohen's d report no sharpness difference
+where one exists. A tissue mask alone fixes that but drops the disc, and the
+window on an unmasked crop then becomes the whole rectangle, so a single
+segmented NIH cell would be compared against a whole field of view and the
+difference would be image content rather than imaging.
+
+The window used here is the intersection: the central disc, with the tissue mask
+eroded by three pixels so a neighbourhood filter never reads across the padding
+boundary. Every crop is kept and the sampled region stays comparable.
+
+Measured that way NIH sits at about 6, and the test domains fall on both sides of
+it: MP-IDB Malariae at 34 and BBBC041 site_a at 24 are sharper, site_b at 2.5 is
+blurrier, and Falciparum, Ovale and Vivax are close enough to be indistinguishable
+from it. That split in direction, not an absence of difference, is what makes blur
+a poor stand-in for the cross-dataset shift in RQ2.
+
+site_b, the one JPEG domain, has the lowest tissue sharpness of all, and JPEG
+quantisation smooths exactly the fine gradients a Laplacian measures, so part of
+that floor may be compression rather than optics.
 
 So the whole-crop figure measures the segmentation mask, not the optics. The
 `_center` column is the one that answers the supervisor's question about blur
@@ -531,6 +553,59 @@ sharp["whole/tissue ratio"] = (sharp.lapvar224 / sharp.lapvar224_center).round(1
 print(sharp.to_string())
 print()
 print("The ratio tracks black_frac almost exactly: the inflation is the mask.")
+""")
+
+md("""
+### Does parasite position bias the tissue-only comparison?
+
+The `_center` window follows the tissue, but it does not know where within that
+tissue a parasite sits.
+
+That leaves a fair objection to the comparison above. Both test sets are cropped
+centred on the parasite annotation, so parasite material sits inside the window by
+construction. NIH crops are centred on the cell instead, so a parasite sits
+wherever it happens to fall within that cell. A parasite is a small dark speck
+against pale cytoplasm, which is exactly the gradient a Laplacian responds to. If
+it lands inside the window more often on one side of the comparison, part of the
+sharpness gap is an artefact of how the crops were cut rather than a property of
+the imaging.
+
+NIH is the only dataset carrying both classes, so it is the only place the size of
+that effect can be measured directly.
+""")
+
+code("""
+nih_lab = (stats[stats["dataset"] == "nih"]
+           .groupby("label_binary", observed=True)
+           [["lapvar224_center", "gray_std_center", "sat_mean_center"]]
+           .median().round(2))
+nih_lab.index = ["uninfected", "parasitised"]
+print("NIH cells by label, measured inside the _center window:")
+print(nih_lab.to_string())
+
+uni = nih_lab.loc["uninfected", "lapvar224_center"]
+par = nih_lab.loc["parasitised", "lapvar224_center"]
+med = stats.groupby("domain", observed=True)["lapvar224_center"].median()
+gap = med["bbbc041/site_a"] - med["nih"]
+
+print()
+print(f"parasite effect inside the window: {par - uni:+.2f} "
+      f"({100 * (par - uni) / uni:+.0f}% over uninfected)")
+print(f"NIH to bbbc041/site_a gap:         {gap:+.2f}")
+print(f"the effect is {abs(gap) / (par - uni):.0f}x too small to explain the gap")
+""")
+
+md("""
+The effect is real and it points the way the objection predicted, but it is an
+order of magnitude too small to overturn the comparison. Parasitised NIH cells
+score about 3 higher inside the window than uninfected ones, while the gap between
+NIH and BBBC041 site_a is about 18. An NIH set in which every crop carried a
+centred parasite would still sit far below site_a. The test domains really are
+sharper on tissue; they are not merely parasite-centred.
+
+The same split is worth noting for a second reason. Contrast and saturation inside
+the window also rise with the label, which is the section B result reached from a
+different direction: tissue colour alone predicts the NIH label at about AUC 0.81.
 """)
 
 # ---------------------------------------------------------------- format
@@ -579,15 +654,37 @@ datasets apart, which is the premise of the whole project; it is reported twice,
 once on all features and once with every size and mask-sensitive feature removed,
 so the result is not just restating that the crops are different shapes.
 
-Read the ranking from the top and the story is uncomfortable for the original
-framing. The largest differences between NIH and every test set are crop-format
-artefacts: the black padding (`black_frac_outer`, `gray_p5`) and native
-resolution (`lapvar_native`). Lighting and focus sit far below them. Once measured
-on tissue only, sharpness is nearly identical across all seven domains
-(`lapvar224_center`, largest |d| about 0.3) and contrast differences shrink by
-roughly sevenfold. What genuinely differs is colour and brightness: on tissue,
-brightness reaches |d| 3.8, the stain axis 2.6 and saturation 1.7, against a
-sharpness ceiling of 0.3.
+Both measures are reported because they disagree, and the disagreement is worth
+seeing. Cohen's d divides by a pooled standard deviation, which a skewed feature
+inflates: `gray_p5` reaches |d| ~ 170 only because NIH's 5th percentile is exactly
+0 on every masked crop, collapsing its variance. Separation is a rank measure, so
+one extreme crop counts once. Where the two rank features differently, separation
+is the one to trust on this data.
+
+Read the ranking from the top and the largest differences between NIH and every
+test set are crop-format artefacts: the black padding (`black_frac_outer`,
+`gray_p5`), native resolution (`lapvar_native`) and whole-crop contrast.
+
+Among the tissue-only features, which are the ones that describe imaging rather
+than crop format, the red channel separates at 0.99, sharpness at 0.98, brightness
+at 0.96, saturation at 0.84 and the stain axis at 0.80. So brightness and colour
+do separate the domains, but sharpness is not the flat feature an earlier version
+of this notebook reported. That reading came from a measuring-window bug described
+in section F, which inflated NIH's spread and drove |d| down to 0.3. Corrected,
+sharpness reaches |d| 5.8.
+
+The two measures disagree in the other direction too, which is worth a sentence in
+the write-up. MP-IDB Falciparum sits at |d| 1.8 on tissue sharpness but at
+separation 0.29: its median is close to NIH's and the distributions overlap
+heavily, and d is large only because the pooled standard deviation is dominated by
+NIH's much larger sample. Reading d alone would put a difference there that a
+reader could not act on.
+
+The per-domain detail matters more than the ceiling. Sharpness separates NIH
+cleanly from MP-IDB Malariae (0.98), BBBC041 site_a (0.93) and site_b (0.89), and
+hardly at all from Falciparum (0.29), Ovale (0.03) or Vivax (0.03). The domains
+that differ are split in direction: site_a and Malariae are sharper than NIH,
+site_b is blurrier.
 """)
 
 code("""
@@ -598,8 +695,29 @@ gap.round(4).to_csv(paths.TABLES / "domain_gap_cohens_d.csv")
 """)
 
 code("""
+sep = domain_gap_table(stats, reference="nih", group_col="domain",
+                       measure=separation)
+print("Rank-based separation vs NIH (0 = indistinguishable, 1 = always separable)")
+print(sep.round(2).to_string())
+sep.round(4).to_csv(paths.TABLES / "domain_gap_separation.csv")
+
+both = pd.DataFrame({"separation": sep["max_abs"],
+                     "cohens_d": gap["max_abs"]}).sort_values(
+                         "separation", ascending=False)
+print()
+print("The two measures ranked side by side:")
+print(both.round(2).head(14).to_string())
+""")
+
+code("""
 fig, ax = plt.subplots(figsize=(9, 6))
-top = gap.drop(columns="max_abs_d").head(14)
+# Tissue-only features. Every crop-format feature separates at 1.00 for every
+# domain, which is the finding stated above but a flat block of full-width bars
+# on a chart. What varies, and what the imaging comparison rests on, is here.
+top = (sep.loc[[f for f in CENTER_FEATURES if f in sep.index]]
+       .drop(columns="max_abs")
+       .sort_values(list(sep.columns[:1]), ascending=False))
+top = top.loc[sep.loc[top.index, "max_abs"].sort_values(ascending=False).index]
 y = np.arange(len(top))
 width = 0.8 / max(1, top.shape[1])
 for i, col in enumerate(top.columns):
@@ -609,12 +727,13 @@ ax.set_yticks(y + 0.4 - width / 2)
 ax.set_yticklabels(top.index)
 ax.invert_yaxis()
 ax.axvline(0, color="k", lw=0.8)
-# symlog, because gray_p5 reaches |d| ~ 170: NIH's 5th percentile is exactly 0
-# for every masked crop, so its variance collapses and the ratio explodes. On a
-# linear axis that one degenerate feature flattens every other bar to nothing.
-ax.set_xscale("symlog", linthresh=1)
-ax.set_xlabel("Cohen's d vs NIH  (symlog; |d| > 1 is a large difference)")
-ax.set_title("Which image properties differ most from the training set")
+# Separation is bounded 0-1, so this needs no log axis and no outlier caveat.
+# That is the point of using it: gray_p5 reaches |d| ~ 170 under Cohen's d
+# purely because NIH's 5th percentile is 0 on every masked crop, which
+# collapses its variance. A rank measure cannot be distorted that way.
+ax.set_xlim(0, 1)
+ax.set_xlabel("Separation from NIH  (0 = indistinguishable, 1 = always separable)")
+ax.set_title("Tissue-only features: which imaging properties differ most from NIH")
 ax.legend(fontsize=7, loc="lower right")
 fig.tight_layout()
 plots.save(fig, "H_domain_gap")
@@ -717,16 +836,20 @@ imgs = [cv2.cvtColor(cv2.imread(str(paths.ROOT / p)), cv2.COLOR_BGR2RGB)
 imgs = [cv2.resize(i, (paths.MODEL_INPUT, paths.MODEL_INPUT),
                    interpolation=cv2.INTER_AREA) for i in imgs]
 
-from malaria.imagestats import _CENTER
+from malaria.imagestats import interior_mask
 
 def measure(batch):
     g = [cv2.cvtColor(i, cv2.COLOR_RGB2GRAY) for i in batch]
     hsv = [cv2.cvtColor(i, cv2.COLOR_RGB2HSV) for i in batch]
     lap = [cv2.Laplacian(x, cv2.CV_64F) for x in g]
+    # Same window as the per-cell statistics. The degraded curve is compared
+    # against reference lines taken from `stats`, so it has to be measured the
+    # same way or the crossings mean nothing.
+    m = [interior_mask(x) for x in g]
     return {"lapvar224": float(np.median([x.var() for x in lap])),
-            "lapvar224_center": float(np.median([x[_CENTER].var() for x in lap])),
+            "lapvar224_center": float(np.median([x[mi].var() for x, mi in zip(lap, m)])),
             "gray_std": float(np.median([x.std() for x in g])),
-            "gray_std_center": float(np.median([x[_CENTER].std() for x in g])),
+            "gray_std_center": float(np.median([x[mi].std() for x, mi in zip(g, m)])),
             "gray_mean": float(np.median([x.mean() for x in g])),
             "sat_mean": float(np.median([h[..., 1].mean() for h in hsv]))}
 
@@ -798,14 +921,18 @@ and 34 for MP-IDB Malariae). Most test domains are *sharper* than the training
 data, so blurring NIH moves away from them. Only site_b, Ovale and Vivax sit below
 NIH, and they are reached with a small kernel before the curve flattens.
 
-**Contrast has to rise to reach most domains.** NIH tissue contrast is about 5,
-lower than every test domain except site_b at 3; the other five run from 13 to
-23. Reducing contrast reaches only site_b. Raising it stops improving past about
+**Contrast has to rise to reach most domains.** NIH tissue contrast is about 4.7,
+lower than every test domain except site_b at 3.3; the other five run from 12.6 to
+22.8. Reducing contrast reaches only site_b. Raising it stops improving past about
 +0.2 because highlights clip, and never reaches site_a at 23.
 
-**Noise moves away from every domain.** It raises Laplacian variance where the
-test sets sit lower, so its curve travels in the opposite direction. No dataset
-here is noisy in that way.
+**Noise moves the measure the wrong way.** It raises Laplacian variance rather
+than lowering it, so it travels away from site_b, Ovale and Vivax, the three that
+sit below NIH. It does pass through the values of site_a and Malariae on the way
+up, and that crossing should not be read as a match: speckle at the pixel level is
+not what makes those two datasets look different, and the curve keeps climbing
+far past anything in the real data. Matching one statistic is not resembling a
+dataset, which is the general caution this whole section carries.
 
 So RQ2 should be reframed. Sweeping blur, noise and contrast still answers a
 legitimate robustness question, namely how much degradation the model absorbs
@@ -923,11 +1050,22 @@ red-minus-blue axis puts NIH at +42, indistinguishable from MP-IDB Falciparum at
 and its largest test set. Saturation runs from 17 (site_b) to 77 (Falciparum)
 with NIH at 65, and tissue brightness separates the domains cleanly. A cheap
 classifier tells every test domain from NIH at AUC 0.998 or higher from tissue
-colour and brightness alone. Sharpness does the opposite: measured on tissue only
-it is nearly identical across all seven domains, at a largest |d| of about 0.3,
-and several test domains are sharper than NIH. That is why blur is the wrong axis
-for RQ2. The sub-question survives as a robustness probe, but it can no longer be
-described as simulating the cross-dataset shift.
+colour and brightness alone.
+
+Sharpness also differs, which an earlier version of this notebook denied. That
+version measured the tissue window as a fixed central disc, and on the 7% of NIH
+crops small enough for the padding to reach inside it the Laplacian returned the
+mask edge instead of the optics. Those crops inflated NIH's standard deviation
+from 4.6 to 77.7 and drove Cohen's d for sharpness to 0.3, which read as no
+difference. With the window corrected (section F) sharpness separates NIH from
+Malariae at 0.98, site_a at 0.93 and site_b at 0.89, at |d| up to 5.8.
+
+Blur is still the wrong axis for RQ2, but for a reason that has to be stated
+correctly. It is not that the domains share a sharpness; it is that they sit on
+both sides of NIH. site_a and Malariae are sharper, so blurring the training data
+moves away from them; only site_b is reached by blurring at all. The sub-question
+survives as a robustness probe, and still cannot be described as simulating the
+cross-dataset shift.
 
 **BBBC041 is two datasets.** site_a and site_b differ from each other about as
 much as either differs from NIH, and are reported separately throughout.
@@ -1039,8 +1177,9 @@ on any gametocyte group outside site_a (A).
 **Patterns in the target and features.** NIH is balanced by construction, and
 every infected patient also contributes uninfected cells (B). In the test sets the
 target is rare and clustered, at about two parasites per positive image (A). Among
-the features, the domains separate on stain colour and tissue brightness and
-hardly at all on tissue sharpness (D, E, F, H).
+the features, the domains separate on tissue brightness, colour and sharpness,
+though sharpness only for three of the six test domains and in both directions
+(D, E, F, H).
 
 **Enough observations for the model?** Yes on the training side: 19,203 training
 cells fine-tuning ImageNet-initialised backbones, in line with the published NIH
@@ -1077,11 +1216,515 @@ JPEG-compressed where site_a is PNG (D, F); Falciparum crops are 78 px against
 """)
 
 
+# ================================================================ week 4
+# ---------------------------------------------------------------- O NIH photos
+md("""
+## O. Week 4: the NIH photographs behind cell_images
+
+After the Week 3 meeting the supervisor pointed to NIH-NLM-ThinBloodSmearsPf
+(Kassim et al., 2020): the full 5312x2988 Chittagong photographs, with an expert
+outline (Polygon Set, 165 photographs) or centre point (Point Set, 800) for every
+cell. Two questions: is it the same dataset as cell_images, and what do the NIH
+cells look like when they are cut from those outlines?
+
+`scripts/check_nih_overlap.py` matches the two releases photograph by photograph.
+`scripts/build_crops.py --nihpoly` recuts every Polygon Set cell twice:
+`polygon_raw`, the padded square with its background kept, which is the test-set
+format, and `polygon_masked`, cut tight to the outline with everything outside it
+set to 0, which is the cell_images format.
+""")
+
+code("""
+overlap = pd.read_csv(paths.TABLES / "nih_source_overlap.csv")
+print("photographs, by release:")
+print(overlap["where"].value_counts().to_string())
+per_patient = overlap.groupby("patient_id")["where"].agg(
+    lambda s: "both" if (s == "both").any() else s.iloc[0])
+print()
+print("patients, by release:", per_patient.value_counts().to_dict())
+print("patients only in cell_images:", sorted(per_patient[per_patient != "both"].index))
+
+both = overlap[overlap["where"] == "both"].copy()
+both["gap"] = both["gt_parasitized"] - both["local_parasitized"]
+agreement = both.groupby("set").agg(
+    photographs=("photo", "size"),
+    parasitised_count_equal=("gap", lambda g: int((g == 0).sum())),
+    within_one=("gap", lambda g: int((g.abs() <= 1).sum())),
+    annotated_parasitised=("gt_parasitized", "sum"),
+    kept_parasitised=("local_parasitized", "sum"),
+    annotated_uninfected=("gt_uninfected", "sum"),
+    kept_uninfected=("local_uninfected", "sum"))
+print()
+print(agreement.to_string())
+""")
+
+code("""
+# The same cells in three formats, restricted to the photographs both releases
+# share: cell_images as shipped, and the Polygon Set outlines cut both ways.
+poly_stats = pd.read_csv(paths.TABLES / "cell_stats_nihpoly.csv", low_memory=False)
+shared_poly = both[both["set"] == "polygon"]
+shared_keys = set(zip(shared_poly["patient_id"], shared_poly["photo"]))
+nih_rows = stats[stats["dataset"] == "nih"].copy()
+nih_rows["photo"] = (nih_rows["source_image"].astype(str)
+                     .str.extract(r"(IMG_[0-9]{8}_[0-9]{6}a?)")[0])
+on_shared = [k in shared_keys for k in zip(nih_rows["patient_id"].astype(str),
+                                           nih_rows["photo"])]
+recut = plots.add_domain(pd.concat(
+    [nih_rows[on_shared].drop(columns="domain"),
+     poly_stats[poly_stats["eval_group"] == "primary"]], ignore_index=True))
+
+recut_cols = ["w", "black_frac", "gray_mean_center", "gray_std_center",
+              "rb_diff_center", "sat_mean_center", "lapvar224_center"]
+print(recut.groupby(["domain", "label_binary"], observed=True)[recut_cols]
+      .median().round(2).to_string())
+
+raw_poly = poly_stats[(poly_stats["source_split"] == "polygon_raw")
+                      & (poly_stats["eval_group"] == "primary")]
+print()
+print(f"parasitised share of annotated red cells on the Polygon Set photographs: "
+      f"{raw_poly['label_binary'].mean():.1%} "
+      f"(cell_images is 50% by construction; BBBC041 site_a is 2.7%)")
+""")
+
+code("""
+fig = plots.contact_sheet([
+    ("cell_images, parasitised", recut[(recut["domain"] == "nih") & (recut["label_binary"] == 1)]),
+    ("polygon masked, parasitised", recut[(recut["domain"] == "nihpoly/polygon_masked") & (recut["label_binary"] == 1)]),
+    ("polygon raw, parasitised", recut[(recut["domain"] == "nihpoly/polygon_raw") & (recut["label_binary"] == 1)]),
+    ("cell_images, uninfected", recut[(recut["domain"] == "nih") & (recut["label_binary"] == 0)]),
+    ("polygon masked, uninfected", recut[(recut["domain"] == "nihpoly/polygon_masked") & (recut["label_binary"] == 0)]),
+    ("polygon raw, uninfected", recut[(recut["domain"] == "nihpoly/polygon_raw") & (recut["label_binary"] == 0)]),
+], n=10, title="NIH cells from the shared Polygon Set photographs, three formats")
+plots.save(fig, "O_nih_recut")
+""")
+
+md("""
+**Findings.** It is the same acquisition, not a new dataset. 192 of the 200
+cell_images patients and 960 of the 965 photographs appear in both releases. The
+eight patients only cell_images has are six uninfected-only patients (C1, C203,
+C204, C206, C207, C209) and two infected ones whose photographs carry an `a`
+suffix (C33, C37). On shared photographs the parasitised counts agree exactly on
+137 of 165 Polygon Set photographs (within one on 152) and on 690 of 795 Point Set
+photographs. cell_images kept 1,087 of the 1,142 annotated parasitised cells on
+the Polygon Set photographs, but only 1,814 of the 33,071 uninfected ones, about
+eleven per photograph: that subsampling is how it was balanced to 50/50.
+
+Two consequences follow. The release can never serve as an external test set,
+and every recut cell inherits its patient's side of `nih_split.csv`, which
+`check_no_patient_leakage` asserts when the manifest is built. And its uninfected
+cells restore the real prevalence: 3.3% of the annotated red cells on the Polygon
+Set photographs are parasitised, close to BBBC041 site_a's 2.7%, where
+cell_images is 50% by construction.
+
+The recut masked cells reproduce the cell_images format. On the shared
+photographs, tissue brightness, contrast, stain colour, saturation, hue and
+sharpness are indistinguishable from the cell_images crops of the same
+photographs (separation 0.00 to 0.10). Only the outline differs: the hand-drawn
+polygons (median 17 vertices) sit slightly outside the automatic segmentation, so
+the recut crops are about 7 px wider (137 vs 130 px uninfected, 146 vs 139
+parasitised) and carry a little more black (0.30 against 0.26 to 0.29). The raw
+variant is the same cells with their plasma and neighbours kept, which is the
+format the test sets are in.
+""")
+
+# ---------------------------------------------------------------- P background
+md("""
+## P. Background removal on the test crops
+
+Section G found crop format to be the largest train/test difference: every NIH
+cell sits on black, while every test crop keeps its plasma and neighbouring
+cells. The supervisor asked for background-removal algorithms to be tried on the
+test crops.
+
+`malaria/background.py` offers two families. rembg's general-purpose models
+(U^2-Net, IS-Net, BiRefNet) were trained on everyday photographs, not blood
+smears; Otsu thresholds on brightness and on saturation are the transparent
+baseline. Whatever the method, only the component belonging to the cell of
+interest is kept (under the crop centre, or touching the annotated parasite for
+MP-IDB), its holes are filled, and the result is cut to the square tight around
+it, which is how cell_images crops are cut.
+
+`scripts/validate_background.py` scores every method before one is used. On the
+recut NIH cells from section O, the hand-drawn outline is a true answer, so
+Dice and IoU measure the cell edge. On MP-IDB, parasite retention measures
+whether the method keeps the thing being classified. BBBC041 has no outlines,
+so only the failure statuses and the contact sheets speak for it.
+""")
+
+code("""
+BACKGROUND_METHOD = "otsu-gray"   # chosen from the validation table below
+# every parasitised test cell plus 3000 uninfected per split (build_masked_crops.py)
+MASKED_NAME = BACKGROUND_METHOD.replace(":", "_") + "_sample"
+
+bg = pd.read_csv(paths.TABLES / "background_method_summary.csv")
+print("Dice against the NIH hand-drawn outlines (median, 10th percentile):")
+print(bg[bg["domain"] == "nihpoly/polygon_raw"]
+      .set_index("method")[["n", "dice_median", "dice_p10", "iou_median",
+                            "status_nearest", "sec_per_1000"]].to_string())
+print()
+thr_path = paths.TABLES / "background_method_summary_u2net_threshold.csv"
+if thr_path.exists():
+    thr = pd.read_csv(thr_path)
+    print("U^2-Net with a lower mask cut-off, against the NIH outlines:")
+    print(thr[thr["domain"] == "nihpoly/polygon_raw"].set_index("method")
+          [["dice_median", "dice_p10", "status_empty", "status_nearest"]].to_string())
+    print()
+print("MP-IDB parasite retention (median; share of crops keeping >= 99%):")
+mp_bg = bg[bg["domain"].str.startswith("mpidb")]
+print(mp_bg.pivot(index="method", columns="domain",
+                  values="retention_median").round(3).to_string())
+print(mp_bg.pivot(index="method", columns="domain",
+                  values="retention_ge_0.99").round(2).to_string())
+print()
+print("BBBC041, no ground truth: failure statuses and kept area:")
+print(bg[bg["domain"].str.startswith("bbbc041")]
+      .pivot(index="method", columns="domain",
+             values=["status_empty", "status_nearest", "kept_frac_median"])
+      .round(3).to_string())
+""")
+
+code("""
+# The methods side by side on the same cells, for the write-up; the per-method
+# sheets (P_background_<method>.png) cover every domain.
+from malaria.background import apply_mask, cell_mask, foreground
+
+val = pd.read_csv(paths.TABLES / "background_method_validation.csv")
+by_id = pd.concat([load_manifest("nihpoly_cells.csv"),
+                   load_manifest("bbbc041_cells.csv")]).set_index("cell_id")
+labels = {"nihpoly/polygon_raw": "NIH (outlined)", "bbbc041/site_a": "BBBC041 site_a",
+          "bbbc041/site_b": "BBBC041 site_b"}
+picked = []
+for dom in labels:
+    ids = val[(val["domain"] == dom) & (val["method"] == "otsu-gray")]["cell_id"].head(2)
+    picked += [(labels[dom], by_id.loc[i, "path"]) for i in ids]
+compare = ["otsu-gray", "rembg:u2net", "rembg:isnet-general-use"]
+fig, axes = plt.subplots(len(compare) + 1, len(picked),
+                         figsize=(1.9 * len(picked), 1.9 * (len(compare) + 1)))
+for c, (label, path) in enumerate(picked):
+    rgb = plots.load_rgb(path)
+    axes[0, c].imshow(rgb)
+    axes[0, c].set_title(label, fontsize=8)
+    for r, method in enumerate(compare, start=1):
+        kept, _ = cell_mask(foreground(rgb, method))
+        axes[r, c].imshow(apply_mask(rgb, kept))
+for r, label in enumerate(["original"] + compare):
+    axes[r, 0].set_ylabel(label, fontsize=8)
+for ax in axes.ravel():
+    ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+fig.tight_layout()
+plots.save(fig, "P_background_compare")
+""")
+
+code("""
+# The chosen method applied to every test crop (scripts/build_masked_crops.py),
+# raw and masked side by side for the same cells.
+masked_stats = plots.add_domain(pd.read_csv(
+    paths.TABLES / f"cell_stats_masked_{MASKED_NAME}.csv", low_memory=False))
+# MP-IDB whole-cell crops keep the parasite-framed cell_id, so the raw crop for a
+# masked MP-IDB cell has to come from the whole-cell manifest, not from `stats`.
+raw_by_id = (pd.concat([stats.loc[stats["dataset"] != "mpidb", ["cell_id", "path"]],
+                        load_manifest("mpidb_wholecell_cells.csv")[["cell_id", "path"]]])
+             .drop_duplicates("cell_id").set_index("cell_id"))
+pairs = []
+for dom in plots.domains_in(masked_stats):
+    sub = masked_stats[(masked_stats["domain"] == dom) & (masked_stats["label_binary"] == 1)]
+    pick = sub.sample(min(8, len(sub)), random_state=0)
+    raw = raw_by_id.loc[pick["cell_id"]].reset_index()
+    pairs += [(dom.replace("_masked", "") + " (raw)", raw), (dom, pick)]
+fig = plots.contact_sheet(pairs, n=8, sample=False,
+                          title=f"Test crops before and after {BACKGROUND_METHOD}")
+plots.save(fig, "P_masked_test_crops")
+""")
+
+md("""
+**MP-IDB framed on its host cell.** MP-IDB annotates parasites, not the red cells
+they sit in, so its crops were cut around the parasite: close-ups that leave the
+cell edge outside the crop, unlike the whole-cell crops of NIH and BBBC041, and
+that no background method can put into the NIH format. `background.host_cell_box`
+reframes every parasite on its host cell: a window three cell widths across
+(`paths.MPIDB_CELL_SIDE`, 140 px, measured on MP-IDB) is thresholded with Otsu,
+touching cells are cut apart with a distance-transform watershed, and the crop is
+the padded square around the cell region(s) holding the parasite. The parasites,
+their order, stage labels and `cell_id`s are unchanged
+(`scripts/build_crops.py --mpidb-wholecell` asserts it).
+""")
+
+code("""
+framing = pd.read_csv(paths.TABLES / "mpidb_wholecell_framing.csv")
+print("host-cell framing outcomes:")
+print(pd.crosstab(framing["species"], framing["framing"], margins=True).to_string())
+print()
+print("median sizes, px (crop side includes the 10% padding):")
+print(framing.groupby("species")[["parasite_side", "host_side", "crop_side"]]
+      .median().to_string())
+print()
+print("largest crops, for inspection:")
+print(framing.nlargest(10, "crop_side")[["cell_id", "stage", "framing",
+                                         "parasite_side", "host_side", "crop_side"]]
+      .to_string(index=False))
+
+mp_parasite = load_manifest("mpidb_cells.csv")
+mp_wholecell = load_manifest("mpidb_wholecell_cells.csv").set_index("cell_id")
+framing_pairs = []
+for species in paths.MPIDB_SPECIES:
+    pick = mp_parasite[mp_parasite["species"] == species].sample(8, random_state=1)
+    framing_pairs.append((f"{species}, parasite", pick))
+    framing_pairs.append((f"{species}, host cell",
+                          mp_wholecell.loc[pick["cell_id"]].reset_index()))
+fig = plots.contact_sheet(framing_pairs, n=8, sample=False,
+                          title="MP-IDB: framed on the parasite vs on its host red cell")
+plots.save(fig, "P_mpidb_framing")
+""")
+
+code("""
+# Does the format gap close? Whole-crop features, as the network is fed them,
+# for NIH, the raw test crops and the masked test crops.
+status = pd.read_csv(paths.TABLES / f"masked_{MASKED_NAME}_status.csv")
+print("background-removal status on the full test sets:")
+print(pd.crosstab([status["dataset"], status["source_split"]], status["status"]).to_string())
+print(status.groupby(["dataset", "source_split"])[["kept_frac", "parasite_retention"]]
+      .median().round(3).to_string())
+
+fmt = plots.add_domain(pd.concat([stats.drop(columns="domain"),
+                                  masked_stats.drop(columns="domain")],
+                                 ignore_index=True))
+fmt = fmt[fmt["eval_group"] == "primary"]
+fmt_cols = ["w", "black_frac", "black_frac_outer", "gray_mean", "gray_std", "lapvar224"]
+print()
+print(fmt.groupby("domain", observed=True)[fmt_cols].median().round(2).to_string())
+print()
+print("separation from NIH on the crop-format features (0 = same, 1 = always separable):")
+print(domain_gap_table(fmt, features=["black_frac", "black_frac_outer", "black_frac_center",
+                                      "gray_mean", "gray_std", "lapvar224"],
+                       measure=separation).round(2).to_string())
+""")
+
+md("""
+**Findings.** General-purpose background removal does not work on these cells, and
+a threshold does. Against the hand-drawn NIH outlines, Otsu on brightness reaches a
+median Dice of 0.90 (10th percentile 0.75) and never returns an empty mask. rembg's
+U^2-Net reaches 0.03: it finds no foreground on 21% of crops and keeps a blob away
+from the centre on another 51%; IS-Net finds none on 49%. Lowering U^2-Net's mask
+cut-off from 0.5 to 0.05 lifts its median Dice only to 0.15, and 0.15 and 0.3 do
+worse, so this is not a threshold setting: a pale red cell on pale plasma is not a
+salient object to a model trained on everyday photographs. BiRefNet needs about 31 s
+per crop on this CPU, some 750 CPU-hours for the test sets, and was not run. Otsu on
+brightness is the method used.
+
+Otsu's own weakness is touching cells, which it merges into one component, so on
+BBBC041 the kept region is the cell under the crop centre together with anything
+touching it. For MP-IDB, framing the host cell adds a distance-transform watershed
+that cuts touching cells apart. A region wider than 1.4 cell widths (2.0 for
+P. vivax, P. ovale and gametocytes, which enlarge or elongate their host) is taken
+for an unsplit clump and falls back to a cell-sized square centred on the parasite.
+The host cell was found for 74% of Falciparum parasites, where smears are densely
+packed, 86% of Malariae, and every Ovale and Vivax parasite. The median Falciparum
+crop went from 78 to 168 px, alongside the NIH cells.
+
+The whole-cell framing is also what makes background removal work on MP-IDB. On the
+parasite close-ups Otsu kept a median 68% of the Falciparum parasite's pixels; on
+the host-cell crops it keeps 98 to 100% for every species, before the annotated
+pixels are added back.
+""")
+
+# ---------------------------------------------------------------- Q colour
+md("""
+## Q. The cells in other colour spaces
+
+The supervisor suggested converting RGB to other colour spaces to see what the
+cells look like there. RGB mixes three things the comparison needs apart: which
+colour a pixel is, how strong that colour is, and how bright it is.
+`malaria/colour.py` measures every cell in:
+
+- **HSV**: hue (which colour), saturation (how strong), value (how bright);
+- **CIE Lab**: lightness apart from a green-red axis `a` and a blue-yellow axis `b`;
+- **YCbCr**: luma apart from blue- and red-difference chroma;
+- **Giemsa deconvolution** with scikit-image's `bex_from_rgb` matrix (methyl blue
+  and eosin): how much of each stain a pixel absorbed. This is the Giemsa
+  counterpart of the H&E deconvolution that the stain-standardisation literature
+  builds on;
+- **H&E deconvolution** (`rgb2hed`), for reference only, since these slides are
+  not H&E-stained.
+
+All means are over tissue pixels, on the test crops in the NIH format from
+section P. Hue is weighted by saturation, because a pale pixel's hue is close to
+arbitrary.
+""")
+
+code("""
+from malaria import colour
+
+cstats = plots.add_domain(pd.read_csv(paths.TABLES / "colour_channel_stats.csv"))
+
+# Hue wraps at 360, and NIH cells are either pink (near 330-360) or lavender (near
+# 240-280), so hue is compared as a signed angle from the NIH circular mean rather
+# than as a raw number of degrees; 350 and 10 are close, not 340 apart.
+nih_hue = np.deg2rad(cstats.loc[cstats["domain"] == "nih", "H"].to_numpy())
+nih_hue_mean = np.rad2deg(np.arctan2(np.sin(nih_hue).mean(), np.cos(nih_hue).mean())) % 360
+cstats["H_from_nih"] = ((cstats["H"] - nih_hue_mean + 180) % 360) - 180
+gap_channels = ["H_from_nih"] + [c for c in colour.CHANNELS if c != "H"]
+print(f"NIH circular mean hue: {nih_hue_mean:.1f} degrees")
+print(cstats.groupby(["domain", "label_binary"], observed=True)[gap_channels]
+      .median().round(3).to_string())
+
+colour_gap = domain_gap_table(cstats, features=gap_channels, measure=separation)
+colour_gap = colour_gap.drop(columns="max_abs")
+fig, ax = plt.subplots(figsize=(0.9 * colour_gap.shape[1] + 2.5, 0.33 * len(colour_gap) + 1.6))
+grid = colour_gap.to_numpy(dtype=float)
+im = ax.imshow(grid, vmin=0, vmax=1, cmap="viridis", aspect="auto")
+ax.set_xticks(range(colour_gap.shape[1]))
+ax.set_xticklabels(colour_gap.columns, rotation=40, ha="right")
+ax.set_yticks(range(len(colour_gap)))
+ax.set_yticklabels(colour_gap.index)
+for (i, j), v in np.ndenumerate(grid):
+    ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=6,
+            color="white" if v < 0.6 else "black")
+ax.grid(False)
+fig.colorbar(im, ax=ax, label="separation from NIH")
+ax.set_title("Which colour channel tells each domain apart from NIH")
+plots.save(fig, "Q_colour_separation")
+""")
+
+code("""
+# One parasitised cell per domain, decomposed. Each channel uses one colour scale
+# across all rows, so a darker or brighter panel means a real difference.
+show = ["H", "S", "V", "L", "a", "b", "giemsa_blue", "giemsa_eosin"]
+examples = []
+for dom in plots.domains_in(cstats):
+    sub = cstats[(cstats["domain"] == dom) & (cstats["label_binary"] == 1)]
+    if len(sub):
+        rgb = plots.load_rgb(sub.sample(1, random_state=3).iloc[0]["path"], paths.MODEL_INPUT)
+        examples.append((dom, rgb, colour.channel_maps(rgb), colour.tissue_mask(rgb)))
+limits = {ch: np.percentile(np.concatenate([m[ch][t] for _, _, m, t in examples]), [2, 98])
+          for ch in show}
+fig, axes = plt.subplots(len(examples), len(show) + 1,
+                         figsize=(1.35 * (len(show) + 1), 1.4 * len(examples)))
+for r, (dom, rgb, maps, tissue) in enumerate(examples):
+    axes[r, 0].imshow(rgb)
+    axes[r, 0].set_ylabel(dom, rotation=0, ha="right", va="center", fontsize=7)
+    for c, ch in enumerate(show, start=1):
+        axes[r, c].imshow(np.where(tissue, maps[ch], np.nan),
+                          cmap="twilight" if ch == "H" else "magma",
+                          vmin=limits[ch][0], vmax=limits[ch][1])
+        if r == 0:
+            axes[r, c].set_title(ch, fontsize=8)
+    if r == 0:
+        axes[r, 0].set_title("RGB", fontsize=8)
+for ax in axes.ravel():
+    ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+fig.tight_layout()
+plots.save(fig, "Q_channel_maps")
+""")
+
+code("""
+# Colour transforms toward NIH. Each is applied to masked test cells, the channel
+# means are measured again, and the separation from NIH is recomputed: a transform
+# that works should pull the colour channels toward 0.
+rng = np.random.default_rng(0)
+nih_ref = cstats[cstats["domain"] == "nih"]
+ref_imgs = [plots.load_rgb(p, paths.MODEL_INPUT) for p in nih_ref["path"].head(200)]
+lab_mu, lab_sd = colour.lab_moments(ref_imgs)
+ref_q = colour.reference_quantiles(ref_imgs)
+nih_h, nih_s = nih_ref["H"].median(), nih_ref["S"].median()
+
+def transforms_for(dom_rows):
+    dh = ((nih_h - dom_rows["H"].median() + 180) % 360) - 180
+    ds = nih_s / max(dom_rows["S"].median(), 1e-6)
+    return {"original": lambda im: im,
+            "HSV shift to NIH": lambda im: colour.hsv_adjust(im, dh, ds),
+            "Reinhard to NIH": lambda im: colour.reinhard(im, lab_mu, lab_sd),
+            "histogram match to NIH": lambda im: colour.match_to_reference(im, ref_q)}
+
+key_channels = ["H_from_nih", "S", "a", "b", "giemsa_blue", "giemsa_eosin"]
+after, gallery = [], {}
+for dom in [d for d in plots.domains_in(cstats) if "_masked/" in d]:
+    rows = cstats[cstats["domain"] == dom]
+    tf = transforms_for(rows)
+    for p in rows["path"].sample(min(40, len(rows)), random_state=0):
+        rgb = plots.load_rgb(p, paths.MODEL_INPUT)
+        for name, fn in tf.items():
+            out = fn(rgb)
+            means = colour.tissue_channel_means(out)
+            means["H_from_nih"] = ((means["H"] - nih_hue_mean + 180) % 360) - 180
+            after.append({"domain": dom, "transform": name, **means})
+            gallery.setdefault(dom, {}).setdefault(name, out)
+after = pd.DataFrame(after)
+
+nih_vals = nih_ref[key_channels]
+effect = (after.groupby(["transform", "domain"])
+          .apply(lambda g: pd.Series({ch: separation(g[ch].to_numpy(), nih_vals[ch].to_numpy())
+                                      for ch in key_channels}))
+          .round(2))
+effect.reset_index().to_csv(paths.TABLES / "colour_transform_effect.csv", index=False)
+print("separation from NIH after each transform (lower is closer to NIH):")
+print(effect.to_string())
+print()
+print(effect.groupby("transform").median().round(2).to_string())
+
+doms = list(gallery)
+names = list(next(iter(gallery.values())))
+fig, axes = plt.subplots(len(doms), len(names), figsize=(2.3 * len(names), 1.9 * len(doms)))
+axes = np.asarray(axes).reshape(len(doms), len(names))
+for r, dom in enumerate(doms):
+    for c, name in enumerate(names):
+        axes[r, c].imshow(gallery[dom][name])
+        axes[r, c].set_xticks([]); axes[r, c].set_yticks([]); axes[r, c].grid(False)
+        if r == 0:
+            axes[r, c].set_title(name, fontsize=8)
+    axes[r, 0].set_ylabel(dom, rotation=0, ha="right", va="center", fontsize=7)
+fig.tight_layout()
+plots.save(fig, "Q_colour_transforms")
+""")
+
+
+md("""
+**Findings.** Measured on tissue pixels of the NIH-format crops, the channel that
+best tells the datasets apart is the Giemsa methyl-blue deconvolution. BBBC041 cells
+absorbed three to four times as much methyl blue as NIH cells (median 0.065 to 0.090
+against 0.022; separation 0.97 and 1.00), and MP-IDB cells up to about twice as much
+(0.033 to 0.054; separation 0.48 to 0.70). The recut NIH cells from section O stay
+close to the NIH crops on every channel (separation 0.17 or less), so these are
+shifts between datasets, not artefacts of how the cells were cut.
+
+The shifts do not all point the same way. site_a is darker and bluer (Lab L 37
+against 66, b -24 against +4); site_b is darker and nearly grey (saturation 0.09
+against 0.26) with little blue-yellow shift; Falciparum leans yellow-brown (b +13),
+while Vivax and Ovale lean blue (b -20 and -15) at close to NIH brightness. No single
+hue, saturation or brightness adjustment can reach every test set.
+
+The transforms bear this out (median over the six test sets, 40 cells each).
+Shifting hue and saturation toward NIH matches saturation but moves methyl blue
+further from NIH than it was untransformed (separation 0.88 against 0.72). Matching
+the Lab mean and spread (Reinhard) or the per-channel histograms brings the
+blue-yellow axis and both stain channels close to NIH (b 0.12, methyl blue 0.17 to
+0.22, eosin about 0.26). For RQ2 this points to a Lab- or stain-based normalisation
+rather than an HSV adjustment, with a check that it does not wash out the parasite.
+""")
+
+
 nb = new_notebook(cells=cells, metadata={
     "kernelspec": {"display_name": "Python 3", "language": "python",
                    "name": "python3"},
     "language_info": {"name": "python", "version": sys.version.split()[0]},
 })
+# Every code cell has to parse before the notebook is written. The cells are
+# built from triple-quoted strings, so a backslash escape meant for the generated
+# code is expanded here instead and silently emits a broken cell. Without this
+# check the failure only surfaces minutes later, when papermill executes it.
+# emits a broken cell. Without this check the failure only surfaces minutes later
+# when papermill executes it.
+broken = []
+for i, c in enumerate(cells):
+    if c.cell_type != "code":
+        continue
+    try:
+        ast.parse(c.source)
+    except SyntaxError as exc:
+        broken.append(f"  cell {i}: {exc.msg} (line {exc.lineno})")
+if broken:
+    msg = "generated notebook has cells that do not parse:"
+    raise SystemExit(chr(10).join([msg] + broken))
+
 OUT.parent.mkdir(parents=True, exist_ok=True)
 nbf.write(nb, str(OUT))
-print(f"wrote {OUT} ({len(cells)} cells)")
+print(f"wrote {OUT} ({len(cells)} cells, all parse)")

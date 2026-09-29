@@ -4,6 +4,7 @@ Roughly 115k images, so this runs once and everything downstream reads the CSV.
 
     python scripts/compute_stats.py
     python scripts/compute_stats.py --workers 8
+    python scripts/compute_stats.py --manifest nihpoly_cells.csv   # -> cell_stats_nihpoly.csv
 """
 import argparse
 import sys
@@ -27,9 +28,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--chunksize", type=int, default=256)
+    ap.add_argument("--manifest", default="all_cells.csv",
+                    help="manifest in data/manifests to compute statistics for")
     args = ap.parse_args()
 
-    manifest = load_manifest()
+    manifest = load_manifest(args.manifest)
     print(f"computing {len(FEATURES)} features for {len(manifest):,} cells "
           f"on {args.workers} workers ...")
 
@@ -41,7 +44,9 @@ def main() -> None:
     stats = pd.concat([manifest.reset_index(drop=True),
                        pd.DataFrame(recs)], axis=1)
     paths.TABLES.mkdir(parents=True, exist_ok=True)
-    out = paths.TABLES / "cell_stats.csv"
+    suffix = Path(args.manifest).stem.replace("_cells", "")
+    out = paths.TABLES / ("cell_stats.csv" if args.manifest == "all_cells.csv"
+                          else f"cell_stats_{suffix}.csv")
     stats.to_csv(out, index=False)
 
     print(f"wrote {out}  ({len(stats):,} rows x {stats.shape[1]} cols)")

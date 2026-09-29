@@ -82,6 +82,24 @@ def split_summary(nih: pd.DataFrame) -> pd.DataFrame:
     }).sort_values("cells", ascending=False)
 
 
+def inherit_nih_split(cells: pd.DataFrame) -> pd.Series:
+    """The split for cells recut from the NIH photographs.
+
+    NIH-NLM-ThinBloodSmearsPf photographs the same patients as cell_images, so a
+    recut cell must land on the same side of the split as its patient already
+    does in nih_split.csv; assigning it afresh would leak patients across splits.
+    Raises if a patient has no entry, rather than silently dropping its cells.
+    """
+    pinned = pd.read_csv(paths.MANIFESTS / "nih_split.csv",
+                         dtype={"patient_id": "string"})
+    per_patient = pinned.drop_duplicates("patient_id").set_index("patient_id")["split"]
+    split = cells["patient_id"].map(per_patient)
+    missing = sorted(set(cells.loc[split.isna(), "patient_id"].astype(str)))
+    if missing:
+        raise KeyError(f"patients with no entry in nih_split.csv: {missing}")
+    return split.rename("split")
+
+
 def check_no_patient_leakage(nih: pd.DataFrame) -> None:
     """Raise if any patient appears in more than one split."""
     per = nih.groupby("patient_id", observed=True)["split"].nunique()
