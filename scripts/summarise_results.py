@@ -124,24 +124,45 @@ def rq2_table(model: str, rq1: pd.DataFrame) -> pd.DataFrame | None:
     return t[["variant", *[c for c in t.columns if c != "variant"]]]
 
 
-def figure(model: str, rq1: pd.DataFrame) -> None:
+VARIANT_MARKERS = {"raw": ("o", "raw crop (RQ1)"), "masked": ("s", "background removed"),
+                   "reinhard": ("^", "+ Reinhard"), "histmatch": ("D", "+ histogram matching")}
+
+
+def figure(model: str, rq1: pd.DataFrame, rq2: pd.DataFrame | None = None) -> None:
+    """One row per test set, one panel per metric; RQ2 variants as extra markers.
+
+    Every panel uses the same row order, so a row is the same test set in all
+    three panels even where a metric is undefined (specificity on MP-IDB).
+    """
     plots.set_style()
-    metrics = [m for m in ("sensitivity", "specificity", "auc") if m in set(rq1["metric"])]
-    fig, axes = plt.subplots(1, len(metrics), figsize=(3.2 * len(metrics), 2.8), sharey=True)
-    for ax, metric in zip(np.atleast_1d(axes), metrics):
-        t = rq1[rq1["metric"] == metric].reset_index(drop=True)
-        for i, r in t.iterrows():
-            c = SET_COLOURS[r["test_set"]]
-            ax.errorbar(100 * r["value"], i, xerr=[[100 * (r["value"] - r["ci_low"])],
-                                                  [100 * (r["ci_high"] - r["value"])]],
-                        fmt="o", color=c, ecolor=c, capsize=3)
-        ax.set_yticks(range(len(t)), t["test_set"])
-        ax.invert_yaxis()
-        ax.set_xlim(0, 100)
-        ax.set_xlabel(f"{metric} (%)" if metric != "auc" else "AUC (x100)")
+    t = rq1.assign(variant="raw") if rq2 is None else pd.concat(
+        [rq1[rq1["test_set"] == "nih_test"].assign(variant="raw"), rq2])
+    sets = list(SET_COLOURS)
+    variants = [v for v in VARIANT_MARKERS if v in set(t["variant"])]
+    offset = {v: (i - (len(variants) - 1) / 2) * 0.16 for i, v in enumerate(variants)}
+    metrics = ["sensitivity", "specificity", "auc"]
+    fig, axes = plt.subplots(1, 3, figsize=(10, 3.4), sharey=True)
+    for ax, metric in zip(axes, metrics):
+        for r in t[t["metric"] == metric].itertuples():
+            y = sets.index(r.test_set) + offset[r.variant]
+            c = SET_COLOURS[r.test_set]
+            ax.errorbar(100 * r.value, y, xerr=[[100 * (r.value - r.ci_low)],
+                                                [100 * (r.ci_high - r.value)]],
+                        fmt=VARIANT_MARKERS[r.variant][0], color=c, ecolor=c,
+                        capsize=2, markersize=5, mfc=c if r.variant == "raw" else "white")
+        ax.set_yticks(range(len(sets)), sets)
+        ax.set_ylim(len(sets) - 0.5, -0.5)
+        ax.set_xlim(0, 101)
+        ax.set_xlabel("AUC (x100)" if metric == "auc" else f"{metric} (%)")
         ax.set_title(metric)
-    fig.suptitle(f"{model}: NIH hold-out vs external test sets (95% image-resampled intervals)",
-                 fontsize=9)
+    if len(variants) > 1:
+        handles = [plt.Line2D([], [], marker=VARIANT_MARKERS[v][0], ls="", color="0.3",
+                              mfc="0.3" if v == "raw" else "white", label=VARIANT_MARKERS[v][1])
+                   for v in variants]
+        fig.legend(handles=handles, loc="lower center", ncol=len(variants), fontsize=8,
+                   bbox_to_anchor=(0.5, -0.12))
+    fig.suptitle(f"{model}: fixed 0.5 threshold, 95% intervals from resampling source images",
+                 fontsize=9, y=1.02)
     plots.save(fig, f"R_{model}")
     plt.close(fig)
 
@@ -168,7 +189,7 @@ def main() -> None:
     rq3 = rq3_table(raw)
     rq3.to_csv(paths.TABLES / f"rq3_{args.model}.csv", index=False)
     print(f"wrote rq3_{args.model}.csv")
-    figure(args.model, rq1)
+    figure(args.model, rq1, rq2)
 
 
 if __name__ == "__main__":
