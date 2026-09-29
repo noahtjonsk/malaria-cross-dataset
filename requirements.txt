@@ -8,12 +8,31 @@ numpy==2.3.5
 pandas==2.3.3
 matplotlib==3.10.6
 scikit-learn==1.7.2
+scipy==1.16.3
 statsmodels==0.14.5
 
 opencv-python==4.13.0.92
-pillow==12.0.0
+pillow==12.3.0
 ImageHash==4.3.2
 albumentations==2.0.8
+scikit-image==0.26.0
+
+# Background removal for the test crops (malaria/background.py). rembg pulls in
+# opencv-python-headless, which shadows opencv-python's cv2 once both are
+# installed; the pipeline only uses cv2 APIs common to both builds.
+rembg[cpu]==2.0.84
+onnxruntime==1.26.0
+
+# Model training and evaluation (malaria/data.py, models.py; scripts/train.py,
+# evaluate.py). Laptop: the CPU build, for the --smoke checks only:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Colab ships its own CUDA build; notebooks/10_train_colab.ipynb uses that.
+torch==2.14.0
+torchvision==0.29.0
+
+# Writing the D2 literature review documents
+python-docx==1.2.0
+pypdf==6.12.2
 
 nbformat==5.10.4
 papermill==2.7.0
