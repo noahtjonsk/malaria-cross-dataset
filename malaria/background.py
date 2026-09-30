@@ -87,7 +87,10 @@ def cell_mask(fg: np.ndarray, seed: np.ndarray | None = None):
 
     seed     component(s) overlapping the seed were kept
     centre   the component under the crop centre was kept
-    nearest  nothing covered the anchor, so the closest component was kept
+    anchor   no component overlapped the seed; the one under its centroid was kept
+    nearest  nothing covered the anchor, so the closest component was kept. It
+             may be a neighbouring cell, so summarise_results.py repeats RQ2
+             without these cells as a robustness check.
     empty    the method found no foreground at all; the mask is empty
     """
     fg = cv2.morphologyEx(fg.astype(np.uint8), cv2.MORPH_OPEN, _KERNEL)
@@ -108,7 +111,7 @@ def cell_mask(fg: np.ndarray, seed: np.ndarray | None = None):
 
     r, c = anchor
     if labels[r, c] > 0:
-        return labels == labels[r, c], "centre" if seed is None else "seed"
+        return labels == labels[r, c], "centre" if seed is None else "anchor"
     # nearest foreground pixel to the anchor
     _, (ir, ic) = ndi.distance_transform_edt(labels == 0, return_indices=True)
     return labels == labels[ir[r, c], ic[r, c]], "nearest"

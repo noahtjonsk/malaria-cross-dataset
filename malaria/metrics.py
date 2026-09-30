@@ -16,7 +16,8 @@ Task: binary classification of single-cell images, parasitised = positive class.
 - Uncertainty: 95% percentile intervals from resampling *source images*,
   because cells cut from one photograph share its stain, focus and lighting and
   are not independent. A cell-level bootstrap would give intervals that are too
-  narrow.
+  narrow. The NIH hold-out set is resampled by *patient*, one level up, since
+  a patient's photographs come from one slide.
 
 Sensitivity and specificity are bootstrapped from per-image counts, so a
 resample of 1,200 BBBC041 photographs costs one weighted sum rather than a pass
@@ -31,6 +32,7 @@ from sklearn.metrics import roc_auc_score
 THRESHOLD = 0.5
 N_BOOT = 2000
 ALPHA = 0.05
+REFERENCE_CLUSTER = "patient_id"   # NIH hold-out; test sets resample source images
 
 
 def _counts(pred: pd.DataFrame, cluster: str) -> pd.DataFrame:
@@ -103,23 +105,40 @@ def share_recovered(holdout: float, before: float, after: float) -> float:
     return (after - before) / drop
 
 
-def summarise(preds: dict, reference: str = "nih_test", seed: int = 0) -> pd.DataFrame:
+def reference_draws(pred: pd.DataFrame, seed: int = 0) -> tuple:
+    """Bootstrap of the NIH hold-out set, resampling *patients*.
+
+    NIH photographs of one patient come from one slide and staining session, so
+    they are not independent either; the test sets have no patient IDs and are
+    resampled by photograph. Returns (rates, auc) as bootstrap_rates and
+    bootstrap_auc do; computed once and passed to summarise for every variant.
+    """
+    return (bootstrap_rates(pred, cluster=REFERENCE_CLUSTER, seed=seed),
+            bootstrap_auc(pred, cluster=REFERENCE_CLUSTER, seed=seed))
+
+
+def summarise(preds: dict, reference: str = "nih_test", seed: int = 0,
+              ref: tuple | None = None) -> pd.DataFrame:
     """One row per test set and metric: value, 95% interval, drop and its interval.
 
     `preds` maps a test-set name to its prediction table (label_binary, prob,
-    source_image). The drop interval comes from resampling the NIH hold-out set
-    and the test set independently and differencing the draws.
+    source_image, and patient_id for the reference). The drop interval comes
+    from resampling the NIH hold-out set and the test set independently and
+    differencing the draws. `ref` is reference_draws() of the hold-out set;
+    it is computed here when not given, and then `preds` must contain it.
     """
-    ref = bootstrap_rates(preds[reference], seed=seed)
-    ref_auc = bootstrap_auc(preds[reference], seed=seed)
+    ref_rates, ref_auc = ref if ref is not None else reference_draws(preds[reference], seed)
     rows = []
     for name, pred in preds.items():
-        rates = bootstrap_rates(pred, seed=seed + 1)
-        auc = bootstrap_auc(pred, seed=seed + 1)
+        if name == reference:
+            rates, auc = ref_rates, ref_auc
+        else:
+            rates = bootstrap_rates(pred, seed=seed + 1)
+            auc = bootstrap_auc(pred, seed=seed + 1)
         for metric, (point, draws) in [*rates.items(), ("auc", auc)]:
             if not np.isfinite(point):
                 continue
-            ref_point, ref_draws = ref_auc if metric == "auc" else ref[metric]
+            ref_point, ref_draws = ref_auc if metric == "auc" else ref_rates[metric]
             lo, hi = interval(draws)
             dlo, dhi = interval(100.0 * (ref_draws - draws))
             rows.append({"test_set": name, "metric": metric, "n_cells": len(pred),
@@ -137,8 +156,9 @@ def self_test() -> None:
 
     def perfect(n):
         y = rng.integers(0, 2, n)
+        img = rng.integers(0, 40, n)
         return pd.DataFrame({"label_binary": y, "prob": y.astype(float),
-                             "source_image": rng.integers(0, 40, n)})
+                             "source_image": img, "patient_id": img // 5})
 
     t = summarise({"nih_test": perfect(500), "other": perfect(800)})
     assert (t["value"] == 1).all(), t

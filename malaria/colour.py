@@ -92,10 +92,18 @@ def tissue_channel_means(rgb: np.ndarray) -> dict:
 
 # ------------------------------------------------------------------ transforms
 def lab_moments(images) -> tuple:
-    """Pooled tissue-pixel mean and std of L, a, b over a list of RGB crops."""
-    pix = np.concatenate([color.rgb2lab(im.astype(np.float64) / 255.0)[tissue_mask(im)]
-                          for im in images])
-    return pix.mean(axis=0), pix.std(axis=0)
+    """Reinhard target: the average per-cell mean and std of L, a, b over RGB crops.
+
+    reinhard() rescales each cell's own (within-cell) spread to the target
+    std, so the target must be a within-cell spread too. A std pooled over the
+    pixels of many cells would add the spread between cells (pink versus
+    lavender NIH cells) and stretch every test cell's contrast beyond any
+    single NIH cell's.
+    """
+    stats = [(lab.mean(axis=0), lab.std(axis=0)) for lab in
+             (color.rgb2lab(im.astype(np.float64) / 255.0)[tissue_mask(im)] for im in images)]
+    means, stds = map(np.array, zip(*stats))
+    return means.mean(axis=0), stds.mean(axis=0)
 
 
 def reinhard(rgb: np.ndarray, target_mean, target_std) -> np.ndarray:
@@ -140,16 +148,21 @@ def match_to_reference(rgb: np.ndarray, ref_quantiles: np.ndarray) -> np.ndarray
 
     skimage.exposure.match_histograms matches whole images, so the black padding
     of a masked crop would take part; here only tissue is matched.
+
+    Each distinct source value is placed at the middle of its run in the
+    cell's CDF and mapped to the reference value at that quantile. uint8
+    channels repeat values a lot, so placing a tied value at the start of its
+    run instead would map all of its pixels to the lowest matching reference
+    quantile and shift the output darker.
     """
     mask = tissue_mask(rgb)
     out = rgb.copy()
-    q = np.linspace(0, 100, ref_quantiles.shape[1])
+    q = np.linspace(0, 1, ref_quantiles.shape[1])
     for c in range(3):
-        src = rgb[..., c][mask].astype(float)
-        src_q = np.percentile(src, q)
-        # strictly increasing x for np.interp
-        src_q = src_q + np.arange(len(q)) * 1e-6
-        out[..., c][mask] = np.clip(np.interp(src, src_q, ref_quantiles[c]),
-                                    0, 255).round().astype(np.uint8)
+        _, inverse, counts = np.unique(rgb[..., c][mask], return_inverse=True,
+                                       return_counts=True)
+        cdf = (np.cumsum(counts) - counts / 2) / counts.sum()
+        mapped = np.clip(np.interp(cdf, q, ref_quantiles[c]), 0, 255).round().astype(np.uint8)
+        out[..., c][mask] = mapped[inverse.ravel()]
     out[~mask] = 0
     return out

@@ -6,7 +6,7 @@
 Reads outputs/predictions/<model>/<variant>_<set>.csv (written by evaluate.py)
 and applies the definitions in malaria/metrics.py: fixed 0.5 threshold, drop in
 percentage points from the NIH hold-out set, 95% intervals from resampling
-source images.
+source images (NIH hold-out: patients).
 
 Test sets reported (lit review, Table 2)
     nih_test           reference
@@ -18,6 +18,9 @@ Test sets reported (lit review, Table 2)
 Writes outputs/tables/
     rq1_<model>.csv    value, interval, drop and drop interval per set and metric
     rq2_<model>.csv    the same per RQ2 variant, plus the share of the drop recovered
+    rq2_<model>_without_nearest.csv
+                       RQ2 again without the BBBC041 cells whose mask fell back to
+                       the nearest component (robustness check)
     rq3_<model>.csv    sensitivity by MP-IDB species group and by BBBC041 life stage,
                        with each stage's share of all missed parasites
 and outputs/figures/R_<model>.png
@@ -37,9 +40,10 @@ import pandas as pd  # noqa: E402
 
 from malaria import paths, plots  # noqa: E402
 from malaria.metrics import (THRESHOLD, bootstrap_rates, interval,  # noqa: E402
-                             share_recovered, summarise)
+                             reference_draws, share_recovered, summarise)
 
 PREDICTIONS = paths.OUTPUTS / "predictions"
+MASK_STATUS = paths.TABLES / "masked_otsu-gray_status.csv"
 VARIANTS = ["raw", "masked", "reinhard", "histmatch"]
 SET_COLOURS = {"nih_test": plots.DOMAIN_COLORS["nih"],
                "bbbc041/site_a": plots.DOMAIN_COLORS["bbbc041/site_a"],
@@ -96,18 +100,31 @@ def rq3_table(raw: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def rq2_table(model: str, rq1: pd.DataFrame) -> pd.DataFrame | None:
+def without_nearest(sets: dict) -> dict:
+    """Drop BBBC041 cells whose background mask fell back to the nearest
+    component (background.cell_mask), which may be a neighbouring cell."""
+    st = pd.read_csv(MASK_STATUS, usecols=["dataset", "cell_id", "status"])
+    nearest = set(st.loc[(st["dataset"] == "bbbc041") & (st["status"] == "nearest"), "cell_id"])
+    return {k: s[~s["cell_id"].isin(nearest)] if k.startswith("bbbc041") else s
+            for k, s in sets.items()}
+
+
+def rq2_table(model: str, nih_test: pd.DataFrame, keep=None) -> pd.DataFrame | None:
+    """Every variant against the same NIH reference, plus the share of the drop
+    recovered. `keep` filters the test sets identically in every variant."""
+    ref = reference_draws(nih_test)
     frames = []
-    for v in VARIANTS[1:]:
+    for v in VARIANTS:
         sets = load(model, v)
         if sets is None:
             continue
-        t = summarise({"nih_test": pd.read_csv(PREDICTIONS / model / "raw_nih_test.csv"), **sets})
+        sets = {k: s for k, s in sets.items() if k != "nih_test"}
+        t = summarise({"nih_test": nih_test, **(keep(sets) if keep else sets)}, ref=ref)
         frames.append(t[t["test_set"] != "nih_test"].assign(variant=v))
-    if not frames:
+    if len(frames) < 2:
         return None
-    t = pd.concat([rq1[rq1["test_set"] != "nih_test"].assign(variant="raw"), *frames])
-    ref = rq1[rq1["test_set"] == "nih_test"].set_index("metric")["value"]
+    t = pd.concat(frames)
+    ref = pd.Series({**{m: pt for m, (pt, _) in ref[0].items()}, "auc": ref[1][0]})
     raw = t[t["variant"] == "raw"].set_index(["test_set", "metric"])["value"]
     masked = t[t["variant"] == "masked"].set_index(["test_set", "metric"])["value"]
     shares = []
@@ -181,10 +198,13 @@ def main() -> None:
     rq1.to_csv(paths.TABLES / f"rq1_{args.model}.csv", index=False)
     print(rq1.round(3).to_string(index=False))
 
-    rq2 = rq2_table(args.model, rq1)
+    rq2 = rq2_table(args.model, raw["nih_test"])
     if rq2 is not None:
         rq2.to_csv(paths.TABLES / f"rq2_{args.model}.csv", index=False)
         print(f"wrote rq2_{args.model}.csv ({sorted(set(rq2['variant']))})")
+        rob = rq2_table(args.model, raw["nih_test"], keep=without_nearest)
+        rob.to_csv(paths.TABLES / f"rq2_{args.model}_without_nearest.csv", index=False)
+        print(f"wrote rq2_{args.model}_without_nearest.csv (robustness check)")
 
     rq3 = rq3_table(raw)
     rq3.to_csv(paths.TABLES / f"rq3_{args.model}.csv", index=False)
