@@ -89,7 +89,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--arch", required=True, choices=ARCHS)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out", type=Path, default=paths.ROOT / "models")
+    ap.add_argument("--out", type=Path, default=paths.MODELS)
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--smoke", action="store_true",

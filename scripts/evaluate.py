@@ -35,9 +35,10 @@ from torch.utils.data import DataLoader  # noqa: E402
 
 from malaria import paths  # noqa: E402
 from malaria.data import CellDataset, TEST_DATASETS, nih_cells, test_cells  # noqa: E402
+from malaria.metrics import THRESHOLD  # noqa: E402
 from malaria.models import build_model  # noqa: E402
 
-PREDICTIONS = paths.OUTPUTS / "predictions"
+PREDICTIONS = paths.PREDICTIONS
 
 
 @torch.no_grad()
@@ -82,7 +83,7 @@ def main() -> None:
         cells["prob"] = predict(net, cells, device, args.batch_size, args.workers)
         dst = out_dir / f"{variant}_{name}.csv"
         cells.to_csv(dst, index=False)
-        called = (cells["prob"] >= 0.5).mean()
+        called = (cells["prob"] >= THRESHOLD).mean()
         print(f"  {variant:9s} {name:16s} {len(cells):6,} cells  "
               f"{100 * called:5.1f}% called parasitised -> {dst.name}")
 

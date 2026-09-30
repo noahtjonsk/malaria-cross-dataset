@@ -28,7 +28,7 @@ from malaria import paths  # noqa: E402
 from malaria.data import (TEST_DATASETS, VARIANT_MANIFESTS, nih_cells,  # noqa: E402
                           test_cells)
 
-OUT = paths.ROOT / "colab"
+OUT = paths.COLAB
 CODE = ["malaria/*.py", "scripts/*.py", "notebooks/10_train_colab.ipynb",
         "requirements.txt", "data/manifests/nih_split.csv",
         "data/manifests/mpidb_stage_audit.csv"]

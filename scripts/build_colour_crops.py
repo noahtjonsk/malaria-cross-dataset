@@ -44,7 +44,8 @@ from malaria.manifests import COLUMNS, _frame, load_manifest, tqdm  # noqa: E402
 METHODS = ("reinhard", "histmatch")
 SOURCE = "masked_otsu-gray_cells.csv"
 REFERENCE_CELLS = 1000
-MASKED_ROOT = "data/crops/masked/otsu-gray"
+MASKED_ROOT = (paths.CROPS_MASKED / "otsu-gray").relative_to(paths.ROOT).as_posix()
+COLOUR_ROOT = paths.CROPS_COLOUR.relative_to(paths.ROOT).as_posix()
 
 _REF = None   # set once per worker process
 
@@ -107,7 +108,7 @@ def main() -> None:
         raise AssertionError(f"{int(bad.sum())} rows outside {MASKED_ROOT}")
 
     for method in args.method:
-        out_rel = [f"data/crops/colour/{method}/{p[len(MASKED_ROOT) + 1:]}"
+        out_rel = [f"{COLOUR_ROOT}/{method}/{p[len(MASKED_ROOT) + 1:]}"
                    for p in cells["path"]]
         jobs = list(zip(cells["path"], out_rel, [method] * len(cells)))
         print(f"{method}: {len(jobs):,} crops on {args.workers} workers")

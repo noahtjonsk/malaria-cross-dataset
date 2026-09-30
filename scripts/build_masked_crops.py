@@ -121,7 +121,8 @@ def main() -> None:
     cells = pd.concat(frames, ignore_index=True)
 
     crops_root = paths.CROPS.relative_to(paths.ROOT).as_posix()
-    out_rel = [f"{crops_root}/masked/{slug(args.method)}/{p[len(crops_root) + 1:]}"
+    masked_root = (paths.CROPS_MASKED / slug(args.method)).relative_to(paths.ROOT).as_posix()
+    out_rel = [f"{masked_root}/{p[len(crops_root) + 1:]}"
                for p in cells["path"]]
     jobs = [(r.cell_id, r.path, o, args.method,
              str(r.species) if r.dataset in ("mpidb", "mpidb_wholecell") else None,

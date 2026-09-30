@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from malaria import paths, plots  # noqa: E402
 from malaria.data import load_input, test_cells  # noqa: E402
 
-OUT = paths.ROOT / "docs" / "methodology" / "figures"
+OUT = paths.MO_FIGURES
 COPY = ["short_1_example_cells.png", "short_3_crop_format.png",
         "short_4_brightness_colour.png"]
 VARIANTS = [("raw", "raw crop (RQ1)"), ("masked", "background removed"),

@@ -42,7 +42,7 @@ from malaria import paths, plots  # noqa: E402
 from malaria.metrics import (THRESHOLD, bootstrap_rates, interval,  # noqa: E402
                              reference_draws, share_recovered, summarise)
 
-PREDICTIONS = paths.OUTPUTS / "predictions"
+PREDICTIONS = paths.PREDICTIONS
 MASK_STATUS = paths.TABLES / "masked_otsu-gray_status.csv"
 VARIANTS = ["raw", "masked", "reinhard", "histmatch"]
 SET_COLOURS = {"nih_test": plots.DOMAIN_COLORS["nih"],

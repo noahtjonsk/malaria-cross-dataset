@@ -47,10 +47,17 @@ CROPS_BBBC041 = CROPS / "bbbc041"
 CROPS_MPIDB = CROPS / "mpidb"
 CROPS_NIHPOLY = CROPS / "nihpoly"
 CROPS_MPIDB_WHOLECELL = CROPS / "mpidb_wholecell"
+CROPS_MASKED = CROPS / "masked"        # <method>/<path under data/crops>, RQ2 step 1
+CROPS_COLOUR = CROPS / "colour"        # <method>/<path under the masked crops>, RQ2 step 2
 
 OUTPUTS = ROOT / "outputs"
 FIGURES = OUTPUTS / "figures"
 TABLES = OUTPUTS / "tables"
+PREDICTIONS = OUTPUTS / "predictions"  # <arch>_s<seed>/<variant>_<set>.csv
+
+MODELS = ROOT / "models"               # trained checkpoints and training logs
+COLAB = ROOT / "colab"                 # zips uploaded to Colab (pack_for_colab.py)
+MO_FIGURES = ROOT / "docs" / "methodology" / "figures"
 
 # --- Conventions shared across the project ---
 MODEL_INPUT = 224      # every statistic that depends on scale is computed at this size
