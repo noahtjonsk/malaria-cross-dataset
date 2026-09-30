@@ -70,3 +70,9 @@ docs/methodology/mo.pdf
 docs/methodology/*.fls
 docs/methodology/*.fdb_latexmk
 docs/methodology/*.toc
+
+# Local tooling config, not part of the project
+CLAUDE.md
+.mcp.json
+.claude/
+.playwright-mcp/
