@@ -113,12 +113,16 @@ def main() -> None:
     print(f"{args.arch} seed {args.seed} on {device}: {len(train_cells):,} train, "
           f"{len(val_cells):,} val cells")
 
+    # The shuffle order and every worker's augmentation seed are drawn from this
+    # one generator at the start of each epoch. Workers are not persistent, so
+    # saving its state after an epoch is enough for --resume to continue
+    # exactly as an uninterrupted run would.
+    loader_rng = torch.Generator().manual_seed(args.seed)
     loaders = {
         "train": DataLoader(CellDataset(train_cells, train=True), shuffle=True,
                             batch_size=settings["batch_size"], num_workers=args.workers,
                             pin_memory=device.type == "cuda", drop_last=False,
-                            generator=torch.Generator().manual_seed(args.seed),
-                            persistent_workers=args.workers > 0),
+                            generator=loader_rng),
         "val": DataLoader(CellDataset(val_cells), batch_size=2 * settings["batch_size"],
                           num_workers=args.workers, pin_memory=device.type == "cuda"),
     }
@@ -140,6 +144,10 @@ def main() -> None:
         optimiser.load_state_dict(ck["optimiser"])
         scaler.load_state_dict(ck["scaler"])
         torch.set_rng_state(ck["torch_rng"])
+        if "loader_rng" in ck:   # checkpoints from before this was saved lack it
+            loader_rng.set_state(ck["loader_rng"])
+        if ck.get("cuda_rng") and device.type == "cuda":
+            torch.cuda.set_rng_state_all(ck["cuda_rng"])
         state = ck["state"]
         print(f"resumed after epoch {state['epoch']}")
 
@@ -160,6 +168,8 @@ def main() -> None:
                                  "seconds": round(time.time() - t0, 1), "best": improved})
         torch.save({"model": net.state_dict(), "optimiser": optimiser.state_dict(),
                     "scaler": scaler.state_dict(), "torch_rng": torch.get_rng_state(),
+                    "loader_rng": loader_rng.get_state(),
+                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
                     "state": state, "settings": settings}, last_path)
         log_path.write_text(json.dumps({"settings": settings, **state}, indent=1))
         print(f"epoch {state['epoch']:2d}  train loss {tr['loss']:.4f}  val loss {va['loss']:.4f}"

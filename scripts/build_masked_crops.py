@@ -1,6 +1,6 @@
 """Put the test-set crops into the NIH format with a validated background method.
 
-    python scripts/build_masked_crops.py --method rembg:u2net
+    python scripts/build_masked_crops.py --method otsu-gray              # the RQ2 test crops
     python scripts/build_masked_crops.py --method otsu-gray --limit 50   # trial run
     python scripts/build_masked_crops.py --method rembg:u2net --uninfected-per-split 3000
         # every parasitised cell, 3000 uninfected per split: enough for the EDA
@@ -35,8 +35,8 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from malaria import paths  # noqa: E402
-from malaria.background import (METHODS, apply_mask, cell_mask,  # noqa: E402
-                                foreground, tight_box)
+from malaria.background import (METHODS, cell_mask, foreground,  # noqa: E402
+                                tight_box, to_nih_format)
 from malaria.manifests import (COLUMNS, MpidbParasiteSeeds, _frame,  # noqa: E402
                                load_manifest, tqdm)
 
@@ -68,9 +68,7 @@ def _process(job) -> dict:
         kept = kept | seed
 
     box = tight_box(kept)
-    out = apply_mask(bgr, kept)
-    if box is not None:
-        out = box.apply(out)
+    out = to_nih_format(bgr, kept)
     dst = paths.ROOT / out_rel
     dst.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(dst), out):
@@ -85,7 +83,9 @@ def _process(job) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--method", required=True, choices=METHODS)
-    ap.add_argument("--datasets", nargs="+", default=["bbbc041", "mpidb"],
+    # Every RQ evaluates whole cells, so MP-IDB defaults to the host-cell framing;
+    # "mpidb" (parasite close-ups) is kept for the EDA only.
+    ap.add_argument("--datasets", nargs="+", default=["bbbc041", "mpidb_wholecell"],
                     choices=["bbbc041", "mpidb", "mpidb_wholecell"])
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--limit", type=int, default=None,
@@ -135,7 +135,10 @@ def main() -> None:
         status = pd.DataFrame(list(tqdm(ex.map(_process, jobs, chunksize=8),
                                         total=len(jobs))))
 
-    st = status.set_index("cell_id").loc[cells["cell_id"]]
+    # ex.map keeps job order, so status lines up with cells row by row; cell_id
+    # alone is not unique (mpidb and mpidb_wholecell share their cell_ids).
+    assert (status["cell_id"].to_numpy() == cells["cell_id"].to_numpy()).all()
+    st = status.set_index("cell_id")
     masked = cells.copy()
     masked["dataset"] = masked["dataset"].astype(str) + "_masked"
     masked["path"] = out_rel
