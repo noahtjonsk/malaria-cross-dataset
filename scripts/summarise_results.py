@@ -202,9 +202,12 @@ def main() -> None:
     if rq2 is not None:
         rq2.to_csv(paths.TABLES / f"rq2_{args.model}.csv", index=False)
         print(f"wrote rq2_{args.model}.csv ({sorted(set(rq2['variant']))})")
-        rob = rq2_table(args.model, raw["nih_test"], keep=without_nearest)
-        rob.to_csv(paths.TABLES / f"rq2_{args.model}_without_nearest.csv", index=False)
-        print(f"wrote rq2_{args.model}_without_nearest.csv (robustness check)")
+        if MASK_STATUS.exists():
+            rob = rq2_table(args.model, raw["nih_test"], keep=without_nearest)
+            rob.to_csv(paths.TABLES / f"rq2_{args.model}_without_nearest.csv", index=False)
+            print(f"wrote rq2_{args.model}_without_nearest.csv (robustness check)")
+        else:
+            print(f"skipped the robustness check: {MASK_STATUS.name} not found")
 
     rq3 = rq3_table(raw)
     rq3.to_csv(paths.TABLES / f"rq3_{args.model}.csv", index=False)
