@@ -90,6 +90,12 @@ There are three EDA notebooks:
   checks the RQ2 background and colour matching.
 - `notebooks/01_eda.ipynb` is the full record and appendix, generated as described below.
 
+`notebooks/04_methodology_explained.ipynb` (HTML: `outputs/04_methodology_explained.html`) walks through
+the D3 Methodology Overview and the VGG-16 baseline results in plain language. It reads
+the saved `rq*_vgg16_s0.csv` tables; rebuild with
+`python -m nbconvert --to notebook --execute --inplace notebooks/04_methodology_explained.ipynb`
+and `python -m nbconvert --to html --no-input notebooks/04_methodology_explained.ipynb --output-dir outputs`.
+
 02 and 03 measure MP-IDB on the whole-cell crops that every RQ evaluates. They are edited
 directly in Jupyter.
 
