@@ -178,7 +178,8 @@ def figure(model: str, rq1: pd.DataFrame, rq2: pd.DataFrame | None = None) -> No
                    for v in variants]
         fig.legend(handles=handles, loc="lower center", ncol=len(variants), fontsize=8,
                    bbox_to_anchor=(0.5, -0.12))
-    fig.suptitle(f"{model}: fixed 0.5 threshold, 95% intervals from resampling source images",
+    fig.suptitle(f"{model}: fixed 0.5 threshold, 95% intervals from resampling source images "
+                 "(NIH hold-out: patients)",
                  fontsize=9, y=1.02)
     plots.save(fig, f"R_{model}")
     plt.close(fig)
