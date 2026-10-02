@@ -2,11 +2,13 @@
 
     python scripts/summarise_results.py --model vgg16_s0
     python scripts/summarise_results.py --model mobilenet_v2_s0_smoke        # after --smoke runs
+    python scripts/summarise_results.py --model vgg16_s0 --variants raw      # RQ1 and RQ3 only
 
 Reads outputs/predictions/<model>/<variant>_<set>.csv (written by evaluate.py)
 and applies the definitions in malaria/metrics.py: fixed 0.5 threshold, drop in
 percentage points from the NIH hold-out set, 95% intervals from resampling
-source images (NIH hold-out: patients).
+source images (NIH hold-out: patients). A missing prediction file for any
+requested variant stops the run, so no table is silently left incomplete.
 
 Test sets reported (lit review, Table 2)
     nih_test           reference
@@ -15,7 +17,7 @@ Test sets reported (lit review, Table 2)
     mpidb/falciparum   sensitivity only (P. falciparum, the NIH species)
     mpidb/other        sensitivity only (P. malariae, ovale and vivax pooled)
 
-Writes outputs/tables/
+Writes outputs/tables/ (every table starts with model, arch and seed columns)
     rq1_<model>.csv    value, interval, drop and drop interval per set and metric
     rq2_<model>.csv    the same per RQ2 variant, plus the share of the drop recovered
     rq2_<model>_without_nearest.csv
@@ -39,64 +41,44 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from malaria import paths, plots  # noqa: E402
-from malaria.metrics import (THRESHOLD, bootstrap_rates, interval,  # noqa: E402
+from malaria.data import VARIANTS  # noqa: E402
+from malaria.metrics import (THRESHOLD, bootstrap, interval,  # noqa: E402
                              reference_draws, share_recovered, summarise)
+from malaria.results import SET_COLOURS, load  # noqa: E402
 
-PREDICTIONS = paths.PREDICTIONS
 MASK_STATUS = paths.TABLES / "masked_otsu-gray_status.csv"
-VARIANTS = ["raw", "masked", "reinhard", "histmatch"]
-SET_COLOURS = {"nih_test": plots.DOMAIN_COLORS["nih"],
-               "bbbc041/site_a": plots.DOMAIN_COLORS["bbbc041/site_a"],
-               "bbbc041/site_b": plots.DOMAIN_COLORS["bbbc041/site_b"],
-               "mpidb/falciparum": plots.DOMAIN_COLORS["mpidb/Falciparum"],
-               "mpidb/other": plots.DOMAIN_COLORS["mpidb/Vivax"]}
-
-
-def split_sets(bbbc: pd.DataFrame, mpidb: pd.DataFrame) -> dict:
-    """The reported test sets, cut from one variant's prediction files."""
-    return {"bbbc041/site_a": bbbc[bbbc["source_split"] == "site_a"],
-            "bbbc041/site_b": bbbc[bbbc["source_split"] == "site_b"],
-            "mpidb/falciparum": mpidb[mpidb["species"] == "Falciparum"],
-            "mpidb/other": mpidb[mpidb["species"] != "Falciparum"]}
-
-
-def load(model: str, variant: str) -> dict | None:
-    d = PREDICTIONS / model
-    files = {n: d / f"{variant}_{n}.csv" for n in ("bbbc041", "mpidb_wholecell")}
-    if not all(f.exists() for f in files.values()):
-        return None
-    sets = split_sets(pd.read_csv(files["bbbc041"]), pd.read_csv(files["mpidb_wholecell"]))
-    if variant == "raw":
-        sets = {"nih_test": pd.read_csv(d / "raw_nih_test.csv"), **sets}
-    return sets
 
 
 def rq3_table(raw: dict) -> pd.DataFrame:
-    """Sensitivity per MP-IDB species group and per BBBC041 life stage."""
-    rows = []
+    """Sensitivity per MP-IDB species group and per BBBC041 life stage.
+
+    The species groups are resampled exactly as in the RQ1 table (same set
+    names), so their intervals agree, and independently of each other, so the
+    interval on their difference is the one for two independent groups.
+    """
+    rows, sens = [], {}
     for name in ("mpidb/falciparum", "mpidb/other"):
-        pt, draws = bootstrap_rates(raw[name])["sensitivity"]
+        sens[name] = pt, draws = bootstrap(raw[name], name)["sensitivity"]
         lo, hi = interval(draws)
         rows.append({"group": name, "n_parasitised": len(raw[name]),
                      "sensitivity": pt, "ci_low": lo, "ci_high": hi})
-    # The species comparison: is the pooled-species gap larger than the interval?
-    f = bootstrap_rates(raw["mpidb/falciparum"], seed=1)["sensitivity"]
-    o = bootstrap_rates(raw["mpidb/other"], seed=2)["sensitivity"]
-    lo, hi = interval(100 * (f[1] - o[1]))
-    rows.append({"group": "falciparum minus other (pp)", "sensitivity": 100 * (f[0] - o[0]),
+    (fp, fd), (op, od) = sens["mpidb/falciparum"], sens["mpidb/other"]
+    lo, hi = interval(100 * (fd - od))
+    rows.append({"group": "falciparum minus other (pp)", "sensitivity": 100 * (fp - op),
                  "ci_low": lo, "ci_high": hi})
 
     pos = pd.concat([raw["bbbc041/site_a"], raw["bbbc041/site_b"]])
-    pos = pos[pos["label_binary"] == 1]
-    missed = pos["prob"] < THRESHOLD
+    pos = pos[pos["label_binary"] == 1].assign(missed=lambda d: d["prob"] < THRESHOLD)
+    site_misses = pos.groupby("source_split")["missed"].sum()
     for (site, stage), g in pos.groupby(["source_split", "stage"]):
-        pt, draws = bootstrap_rates(g)["sensitivity"]
+        name = f"bbbc041/{site}/{stage}"
+        pt, draws = bootstrap(g, name)["sensitivity"]
         lo, hi = interval(draws)
-        m = int((g["prob"] < THRESHOLD).sum())
-        rows.append({"group": f"bbbc041/{site}/{stage}", "n_parasitised": len(g),
+        m = int(g["missed"].sum())
+        rows.append({"group": name, "n_parasitised": len(g),
                      "sensitivity": pt, "ci_low": lo, "ci_high": hi,
                      "missed": m, "miss_rate": m / len(g),
-                     "share_of_site_misses": m / max(int(missed[pos["source_split"] == site].sum()), 1)})
+                     "share_of_site_misses": m / max(int(site_misses[site]), 1)})
     return pd.DataFrame(rows)
 
 
@@ -109,35 +91,36 @@ def without_nearest(sets: dict) -> dict:
             for k, s in sets.items()}
 
 
-def rq2_table(model: str, nih_test: pd.DataFrame, keep=None) -> pd.DataFrame | None:
+def rq2_table(variant_sets: dict, nih_test: pd.DataFrame, ref: dict, keep=None) -> pd.DataFrame:
     """Every variant against the same NIH reference, plus the share of the drop
     recovered. `keep` filters the test sets identically in every variant."""
-    ref = reference_draws(nih_test)
     frames = []
-    for v in VARIANTS:
-        sets = load(model, v)
-        if sets is None:
-            continue
+    for v, sets in variant_sets.items():
         sets = {k: s for k, s in sets.items() if k != "nih_test"}
         t = summarise({"nih_test": nih_test, **(keep(sets) if keep else sets)}, ref=ref)
         frames.append(t[t["test_set"] != "nih_test"].assign(variant=v))
-    if len(frames) < 2:
-        return None
-    t = pd.concat(frames)
-    ref = pd.Series({**{m: pt for m, (pt, _) in ref[0].items()}, "auc": ref[1][0]})
-    raw = t[t["variant"] == "raw"].set_index(["test_set", "metric"])["value"]
-    masked = t[t["variant"] == "masked"].set_index(["test_set", "metric"])["value"]
-    shares = []
+    t = pd.concat(frames, ignore_index=True)
+    holdout = {m: pt for m, (pt, _) in ref.items()}
+    by_key = t.set_index(["variant", "test_set", "metric"])["value"]
+
+    def value(variant, r):
+        return by_key.get((variant, r.test_set, r.metric), np.nan)
+
+    total, step = [], []
     for r in t.itertuples():
-        key, h = (r.test_set, r.metric), ref[r.metric]
-        total = share_recovered(h, raw.get(key, np.nan), r.value)
-        step = (share_recovered(h, raw.get(key, np.nan), masked.get(key, np.nan))
-                if r.variant == "masked" else
-                share_recovered(h, raw.get(key, np.nan), r.value)
-                - share_recovered(h, raw.get(key, np.nan), masked.get(key, np.nan))
-                if r.variant in ("reinhard", "histmatch") else np.nan)
-        shares.append((total if r.variant != "raw" else np.nan, step))
-    t["share_recovered_total"], t["share_recovered_step"] = zip(*shares)
+        h, raw = holdout[r.metric], value("raw", r)
+        s_mask = share_recovered(h, raw, value("masked", r))
+        s_total = share_recovered(h, raw, r.value)
+        if r.variant == "raw":
+            total.append(np.nan)
+            step.append(np.nan)
+        elif r.variant == "masked":
+            total.append(s_total)
+            step.append(s_mask)
+        else:                     # a colour step, applied after background removal
+            total.append(s_total)
+            step.append(s_total - s_mask)
+    t["share_recovered_total"], t["share_recovered_step"] = total, step
     return t[["variant", *[c for c in t.columns if c != "variant"]]]
 
 
@@ -187,32 +170,41 @@ def figure(model: str, rq1: pd.DataFrame, rq2: pd.DataFrame | None = None) -> No
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, help="folder name under outputs/predictions")
+    ap.add_argument("--model", required=True, help="run tag, e.g. resnet50_s0")
+    ap.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=VARIANTS,
+                    help="all must have prediction files; raw is always included")
     args = ap.parse_args()
+    variants = ["raw", *[v for v in VARIANTS if v in args.variants and v != "raw"]]
 
-    raw = load(args.model, "raw")
-    if raw is None:
-        raise SystemExit(f"no raw predictions under {PREDICTIONS / args.model}")
+    arch, seed, _ = paths.parse_run_tag(args.model)
+    ident = {"model": args.model, "arch": arch, "seed": seed}
+
+    def save(t: pd.DataFrame, name: str) -> None:
+        t = pd.concat([pd.DataFrame(ident, index=t.index), t], axis=1)
+        t.to_csv(paths.TABLES / name, index=False)
+        print(f"wrote {name}")
+
+    variant_sets = {v: load(args.model, v) for v in variants}   # raises if any is missing
+    raw = variant_sets["raw"]
+    if "masked" in variants and not MASK_STATUS.exists():
+        raise SystemExit(f"{MASK_STATUS} is needed for the robustness check "
+                         "(it is packed into code.zip by pack_for_colab.py)")
     paths.TABLES.mkdir(parents=True, exist_ok=True)
 
-    rq1 = summarise(raw)
-    rq1.to_csv(paths.TABLES / f"rq1_{args.model}.csv", index=False)
+    ref = reference_draws(raw["nih_test"])
+    rq1 = summarise(raw, ref=ref)
+    save(rq1, f"rq1_{args.model}.csv")
     print(rq1.round(3).to_string(index=False))
 
-    rq2 = rq2_table(args.model, raw["nih_test"])
-    if rq2 is not None:
-        rq2.to_csv(paths.TABLES / f"rq2_{args.model}.csv", index=False)
-        print(f"wrote rq2_{args.model}.csv ({sorted(set(rq2['variant']))})")
-        if MASK_STATUS.exists():
-            rob = rq2_table(args.model, raw["nih_test"], keep=without_nearest)
-            rob.to_csv(paths.TABLES / f"rq2_{args.model}_without_nearest.csv", index=False)
-            print(f"wrote rq2_{args.model}_without_nearest.csv (robustness check)")
-        else:
-            print(f"skipped the robustness check: {MASK_STATUS.name} not found")
+    rq2 = None
+    if len(variants) > 1:
+        rq2 = rq2_table(variant_sets, raw["nih_test"], ref)
+        save(rq2, f"rq2_{args.model}.csv")
+        if "masked" in variants:
+            rob = rq2_table(variant_sets, raw["nih_test"], ref, keep=without_nearest)
+            save(rob, f"rq2_{args.model}_without_nearest.csv")
 
-    rq3 = rq3_table(raw)
-    rq3.to_csv(paths.TABLES / f"rq3_{args.model}.csv", index=False)
-    print(f"wrote rq3_{args.model}.csv")
+    save(rq3_table(raw), f"rq3_{args.model}.csv")
     figure(args.model, rq1, rq2)
 
 

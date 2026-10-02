@@ -85,6 +85,18 @@ MPIDB_HOST_LIMIT = {"normal": 1.4, "enlarged": 2.0}
 STAGE_NAMES = {"R": "ring", "T": "trophozoite", "S": "schizont", "G": "gametocyte"}
 
 
+def run_tag(arch: str, seed: int, smoke: bool = False) -> str:
+    """Name of one training run: its checkpoint, log and predictions folder."""
+    return f"{arch}_s{seed}" + ("_smoke" if smoke else "")
+
+
+def parse_run_tag(tag: str) -> tuple:
+    """(arch, seed, smoke) back from a run tag; arch names may contain '_'."""
+    smoke = tag.endswith("_smoke")
+    arch, seed = tag.removesuffix("_smoke").rsplit("_s", 1)
+    return arch, int(seed), smoke
+
+
 def ensure_dirs() -> None:
     """Create every generated-artefact directory. Safe to call repeatedly."""
     for d in (MANIFESTS, CROPS_BBBC041, CROPS_MPIDB, CROPS_NIHPOLY,

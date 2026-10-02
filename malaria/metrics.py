@@ -18,31 +18,39 @@ Task: binary classification of single-cell images, parasitised = positive class.
   are not independent. A cell-level bootstrap would give intervals that are too
   narrow. The NIH hold-out set is resampled by *patient*, one level up, since
   a patient's photographs come from one slide.
-
-Sensitivity and specificity are bootstrapped from per-image counts, so a
-resample of 1,200 BBBC041 photographs costs one weighted sum rather than a pass
-over 80,000 cells.
+- Pairing: each set's resamples are keyed by its name (resample_weights), so
+  two models, or two RQ2 variants, scored on the same cells are resampled
+  identically, and the interval of their difference is a paired one.
 """
 from __future__ import annotations
 
+import zlib
+
 import numpy as np
 import pandas as pd
+from scipy import sparse
 from sklearn.metrics import roc_auc_score
 
 THRESHOLD = 0.5
 N_BOOT = 2000
 ALPHA = 0.05
+BOOT_SEED = 0
 REFERENCE_CLUSTER = "patient_id"   # NIH hold-out; test sets resample source images
+AUC_CHUNK = 200                    # bootstrap draws per AUC block (memory only)
 
 
-def _counts(pred: pd.DataFrame, cluster: str) -> pd.DataFrame:
-    """Per-cluster true/false positive/negative counts at THRESHOLD."""
-    y = pred["label_binary"].astype(int).to_numpy()
-    yhat = (pred["prob"].to_numpy() >= THRESHOLD).astype(int)
-    df = pd.DataFrame({"c": pred[cluster].astype(str).to_numpy(),
-                       "tp": (y == 1) & (yhat == 1), "fn": (y == 1) & (yhat == 0),
-                       "tn": (y == 0) & (yhat == 0), "fp": (y == 0) & (yhat == 1)})
-    return df.groupby("c")[["tp", "fn", "tn", "fp"]].sum()
+def resample_weights(clusters, name: str, n_boot: int = N_BOOT) -> tuple:
+    """How often each cluster is drawn in each resample of one named set.
+
+    Returns (sorted cluster ids, n_boot x n_clusters counts). The random stream
+    is keyed by BOOT_SEED and the set's name, so a set is resampled the same way
+    in every table, for every model and every RQ2 variant scored on the same
+    cells, while different sets (the NIH hold-out and a test set, or the two
+    MP-IDB species groups) get independent streams.
+    """
+    ids = np.unique(np.asarray(clusters).astype(str))
+    rng = np.random.default_rng([BOOT_SEED, zlib.crc32(name.encode())])
+    return ids, rng.multinomial(len(ids), np.full(len(ids), 1 / len(ids)), size=n_boot)
 
 
 def _rates(tp, fn, tn, fp) -> dict:
@@ -51,37 +59,67 @@ def _rates(tp, fn, tn, fp) -> dict:
                 "specificity": np.divide(tn, tn + fp)}
 
 
-def bootstrap_rates(pred: pd.DataFrame, cluster: str = "source_image",
-                    n_boot: int = N_BOOT, seed: int = 0) -> dict:
-    """Point estimate and n_boot cluster-resampled draws of sensitivity and specificity.
+def _weighted_auc(y, p, ci, n_clusters: int, weights: np.ndarray) -> np.ndarray:
+    """AUC for each row of cluster weights, as if every cell were repeated as
+    often as its cluster was drawn (Mann-Whitney statistic, ties count half).
 
-    Returns {"sensitivity": (point, draws), "specificity": (point, draws)}; a
-    rate with no cells of its class (specificity on MP-IDB) is NaN throughout.
+    The scores are sorted once; each resample then costs a sparse product and a
+    cumulative sum instead of a fresh sort of every cell.
     """
-    c = _counts(pred, cluster)
-    point = _rates(*(c[k].sum() for k in ("tp", "fn", "tn", "fp")))
-    rng = np.random.default_rng(seed)
-    # How often each cluster is drawn in each resample (n_boot x n_clusters).
-    w = rng.multinomial(len(c), np.full(len(c), 1 / len(c)), size=n_boot)
-    draws = _rates(*(w @ c[k].to_numpy() for k in ("tp", "fn", "tn", "fp")))
-    return {k: (float(point[k]), draws[k]) for k in point}
+    order = np.argsort(p, kind="mergesort")
+    _, g = np.unique(p[order], return_inverse=True)       # tie groups, ascending score
+    y, c = y[order], ci[order]
+    shape = (int(g.max()) + 1, n_clusters)
+    # Transposed (tie group x cluster) counts of positives and negatives.
+    pos = sparse.csr_matrix((np.ones(int((y == 1).sum())), (g[y == 1], c[y == 1])), shape=shape)
+    neg = sparse.csr_matrix((np.ones(int((y == 0).sum())), (g[y == 0], c[y == 0])), shape=shape)
+    out = np.empty(len(weights))
+    for i in range(0, len(weights), AUC_CHUNK):
+        w = weights[i:i + AUC_CHUNK].astype(float).T          # cluster x draw
+        P, N = np.asarray(pos @ w).T, np.asarray(neg @ w).T   # draw x tie group
+        below = np.cumsum(N, axis=1) - N                    # negatives scored lower
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[i:i + AUC_CHUNK] = (P * (below + 0.5 * N)).sum(1) / (P.sum(1) * N.sum(1))
+    return out
 
 
-def bootstrap_auc(pred: pd.DataFrame, cluster: str = "source_image",
-                  n_boot: int = 500, seed: int = 0):
-    """AUC and its cluster-resampled draws; NaN when only one class is present."""
+def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
+              n_boot: int = N_BOOT) -> dict:
+    """Point estimate and cluster-resampled draws of every metric for one set.
+
+    Returns {"sensitivity" | "specificity" | "auc": (point, draws)}. A metric the
+    set cannot define (specificity and AUC on parasitised-only cells) is NaN.
+    Sensitivity and specificity come from per-cluster counts, so a resample of
+    1,200 BBBC041 photographs is one weighted sum, not a pass over 80,000 cells.
+    """
+    clusters = pred[cluster].astype(str).to_numpy()
+    ids, w = resample_weights(clusters, name, n_boot)
+    ci = np.searchsorted(ids, clusters)
     y = pred["label_binary"].astype(int).to_numpy()
-    p = pred["prob"].to_numpy()
+    p = pred["prob"].to_numpy(dtype=float)
+    yhat = (p >= THRESHOLD).astype(int)
+    counts = np.stack([np.bincount(ci, weights=((y == a) & (yhat == b)).astype(float),
+                                   minlength=len(ids))
+                       for a, b in ((1, 1), (1, 0), (0, 0), (0, 1))], axis=1)  # tp fn tn fp
+    point = _rates(*counts.sum(0))
+    draws = _rates(*(w @ counts).T)
+    out = {k: (float(point[k]), draws[k]) for k in point}
     if len(np.unique(y)) < 2:
-        return float("nan"), np.full(n_boot, np.nan)
-    groups = pd.Series(np.arange(len(pred))).groupby(
-        pred[cluster].astype(str).to_numpy()).apply(np.asarray).tolist()
-    rng = np.random.default_rng(seed)
-    draws = np.empty(n_boot)
-    for b in range(n_boot):
-        idx = np.concatenate([groups[i] for i in rng.integers(len(groups), size=len(groups))])
-        draws[b] = roc_auc_score(y[idx], p[idx]) if len(np.unique(y[idx])) == 2 else np.nan
-    return float(roc_auc_score(y, p)), draws
+        out["auc"] = (float("nan"), np.full(n_boot, np.nan))
+    else:
+        auc = _weighted_auc(y, p, ci, len(ids), np.vstack([np.ones(len(ids)), w]))
+        out["auc"] = (float(auc[0]), auc[1:])
+    return out
+
+
+def reference_draws(pred: pd.DataFrame, name: str = "nih_test") -> dict:
+    """Bootstrap of the NIH hold-out set, resampling *patients*.
+
+    NIH photographs of one patient come from one slide and staining session, so
+    they are not independent either; the test sets have no patient IDs and are
+    resampled by photograph.
+    """
+    return bootstrap(pred, name, cluster=REFERENCE_CLUSTER)
 
 
 def interval(draws: np.ndarray) -> tuple:
@@ -97,6 +135,12 @@ def drop_pp(holdout: float, test: float) -> float:
     return 100.0 * (holdout - test)
 
 
+def drop_draws(ref: dict, test: dict, metric: str) -> tuple:
+    """Point drop and its bootstrap draws (pp) from two bootstrap() results."""
+    (rp, rd), (tp, td) = ref[metric], test[metric]
+    return drop_pp(rp, tp), 100.0 * (rd - td)
+
+
 def share_recovered(holdout: float, before: float, after: float) -> float:
     """(after - before) / drop, NaN when the drop is not positive."""
     drop = holdout - before
@@ -105,64 +149,63 @@ def share_recovered(holdout: float, before: float, after: float) -> float:
     return (after - before) / drop
 
 
-def reference_draws(pred: pd.DataFrame, seed: int = 0) -> tuple:
-    """Bootstrap of the NIH hold-out set, resampling *patients*.
-
-    NIH photographs of one patient come from one slide and staining session, so
-    they are not independent either; the test sets have no patient IDs and are
-    resampled by photograph. Returns (rates, auc) as bootstrap_rates and
-    bootstrap_auc do; computed once and passed to summarise for every variant.
-    """
-    return (bootstrap_rates(pred, cluster=REFERENCE_CLUSTER, seed=seed),
-            bootstrap_auc(pred, cluster=REFERENCE_CLUSTER, seed=seed))
-
-
-def summarise(preds: dict, reference: str = "nih_test", seed: int = 0,
-              ref: tuple | None = None) -> pd.DataFrame:
+def summarise(preds: dict, reference: str = "nih_test", ref: dict | None = None) -> pd.DataFrame:
     """One row per test set and metric: value, 95% interval, drop and its interval.
 
     `preds` maps a test-set name to its prediction table (label_binary, prob,
-    source_image, and patient_id for the reference). The drop interval comes
-    from resampling the NIH hold-out set and the test set independently and
-    differencing the draws. `ref` is reference_draws() of the hold-out set;
+    source_image, and patient_id for the reference). The NIH hold-out set and
+    each test set are resampled independently, and the drop interval comes from
+    differencing their draws. `ref` is reference_draws() of the hold-out set;
     it is computed here when not given, and then `preds` must contain it.
     """
-    ref_rates, ref_auc = ref if ref is not None else reference_draws(preds[reference], seed)
+    ref = ref if ref is not None else reference_draws(preds[reference], reference)
     rows = []
     for name, pred in preds.items():
-        if name == reference:
-            rates, auc = ref_rates, ref_auc
-        else:
-            rates = bootstrap_rates(pred, seed=seed + 1)
-            auc = bootstrap_auc(pred, seed=seed + 1)
-        for metric, (point, draws) in [*rates.items(), ("auc", auc)]:
+        is_ref = name == reference
+        res = ref if is_ref else bootstrap(pred, name)
+        for metric, (point, draws) in res.items():
             if not np.isfinite(point):
                 continue
-            ref_point, ref_draws = ref_auc if metric == "auc" else ref_rates[metric]
             lo, hi = interval(draws)
-            dlo, dhi = interval(100.0 * (ref_draws - draws))
+            drop, dd = drop_draws(ref, res, metric)
+            dlo, dhi = interval(dd)
             rows.append({"test_set": name, "metric": metric, "n_cells": len(pred),
                          "n_images": pred["source_image"].nunique(),
                          "value": point, "ci_low": lo, "ci_high": hi,
-                         "drop_pp": np.nan if name == reference else drop_pp(ref_point, point),
-                         "drop_ci_low": np.nan if name == reference else dlo,
-                         "drop_ci_high": np.nan if name == reference else dhi})
+                         "drop_pp": np.nan if is_ref else drop,
+                         "drop_ci_low": np.nan if is_ref else dlo,
+                         "drop_ci_high": np.nan if is_ref else dhi})
     return pd.DataFrame(rows)
 
 
 def self_test() -> None:
-    """A perfect predictor must score 1 everywhere with no drop (continuous-analysis check)."""
+    """Continuous-analysis checks on the metric code."""
     rng = np.random.default_rng(0)
 
-    def perfect(n):
+    def fake(n, perfect=True):
         y = rng.integers(0, 2, n)
         img = rng.integers(0, 40, n)
-        return pd.DataFrame({"label_binary": y, "prob": y.astype(float),
+        p = y.astype(float) if perfect else np.round(rng.random(n) * 0.6 + 0.4 * y, 2)
+        return pd.DataFrame({"label_binary": y, "prob": p,
                              "source_image": img, "patient_id": img // 5})
 
-    t = summarise({"nih_test": perfect(500), "other": perfect(800)})
+    # A perfect predictor scores 1 everywhere with no drop.
+    t = summarise({"nih_test": fake(500), "other": fake(800)})
     assert (t["value"] == 1).all(), t
     assert (t["drop_pp"].fillna(0) == 0).all(), t
+    # The weighted AUC equals scikit-learn's (ties included), and so does a
+    # resample on the cells it duplicates.
+    d = fake(3000, perfect=False)
+    b = bootstrap(d, "check")
+    assert abs(b["auc"][0] - roc_auc_score(d["label_binary"], d["prob"])) < 1e-12
+    ids, w = resample_weights(d["source_image"], "check")
+    rep = np.repeat(np.arange(len(d)), w[0][np.searchsorted(ids, d["source_image"].astype(str))])
+    assert abs(b["auc"][1][0] - roc_auc_score(d["label_binary"].iloc[rep],
+                                              d["prob"].iloc[rep])) < 1e-12
+    # Same set, same draws (paired); a differently named set is independent.
+    b2 = bootstrap(d.copy(), "check")
+    assert all(np.array_equal(b[k][1], b2[k][1], equal_nan=True) for k in b)
+    assert not np.array_equal(b["auc"][1], bootstrap(d, "other set")["auc"][1])
     assert share_recovered(0.9, 0.6, 0.75) == 0.5
     assert np.isnan(share_recovered(0.9, 0.95, 0.97))
     print("metrics self-test passed")

@@ -38,7 +38,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from torch.utils.data import DataLoader  # noqa: E402
 
-from malaria import paths  # noqa: E402
+from malaria import paths, provenance  # noqa: E402
 from malaria.data import CellDataset, nih_cells  # noqa: E402
 from malaria.metrics import THRESHOLD  # noqa: E402
 from malaria.models import ARCHS, build_model, check_all_trainable, count_parameters  # noqa: E402
@@ -53,6 +53,14 @@ def seed_everything(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def save_atomic(obj, path: Path) -> None:
+    """torch.save to a temporary file, then rename: a disconnect mid-write
+    (checkpoints go to Drive on Colab) leaves the previous file intact."""
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
 
 
 def run_epoch(net, loader, device, loss_fn, optimiser=None, scaler=None):
@@ -101,7 +109,8 @@ def main() -> None:
     seed_everything(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     settings = dict(SETTINGS, arch=args.arch, seed=args.seed,
-                    pretrained=not args.no_pretrained, smoke=args.smoke)
+                    pretrained=not args.no_pretrained, smoke=args.smoke,
+                    git_commit=provenance.git_commit())
 
     train_cells, val_cells = nih_cells("train"), nih_cells("val")
     if args.smoke:
@@ -134,7 +143,7 @@ def main() -> None:
     loss_fn = torch.nn.BCEWithLogitsLoss()
 
     args.out.mkdir(parents=True, exist_ok=True)
-    tag = f"{args.arch}_s{args.seed}" + ("_smoke" if args.smoke else "")
+    tag = paths.run_tag(args.arch, args.seed, args.smoke)
     best_path, last_path = args.out / f"{tag}.pt", args.out / f"{tag}_last.pt"
     log_path = args.out / f"{tag}_log.json"
     state = {"epoch": 0, "best_val_loss": float("inf"), "bad_epochs": 0, "history": []}
@@ -160,17 +169,17 @@ def main() -> None:
         improved = va["loss"] < state["best_val_loss"]
         if improved:
             state["best_val_loss"], state["bad_epochs"] = va["loss"], 0
-            torch.save({"model": net.state_dict(), "settings": settings,
-                        "epoch": state["epoch"], "val": va}, best_path)
+            save_atomic({"model": net.state_dict(), "settings": settings,
+                         "epoch": state["epoch"], "val": va}, best_path)
         else:
             state["bad_epochs"] += 1
         state["history"].append({"epoch": state["epoch"], "train": tr, "val": va,
                                  "seconds": round(time.time() - t0, 1), "best": improved})
-        torch.save({"model": net.state_dict(), "optimiser": optimiser.state_dict(),
-                    "scaler": scaler.state_dict(), "torch_rng": torch.get_rng_state(),
-                    "loader_rng": loader_rng.get_state(),
-                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
-                    "state": state, "settings": settings}, last_path)
+        save_atomic({"model": net.state_dict(), "optimiser": optimiser.state_dict(),
+                     "scaler": scaler.state_dict(), "torch_rng": torch.get_rng_state(),
+                     "loader_rng": loader_rng.get_state(),
+                     "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
+                     "state": state, "settings": settings}, last_path)
         log_path.write_text(json.dumps({"settings": settings, **state}, indent=1))
         print(f"epoch {state['epoch']:2d}  train loss {tr['loss']:.4f}  val loss {va['loss']:.4f}"
               f"  val sens {va['sensitivity']:.3f}  spec {va['specificity']:.3f}"

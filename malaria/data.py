@@ -50,10 +50,19 @@ VARIANT_MANIFESTS = {
     "reinhard": "colour_reinhard_cells.csv",
     "histmatch": "colour_histmatch_cells.csv",
 }
+VARIANTS = tuple(VARIANT_MANIFESTS)
 VARIANT_SUFFIX = {"raw": "", "masked": "_masked", "reinhard": "_reinhard",
                   "histmatch": "_histmatch"}
 TEST_DATASETS = ("bbbc041", "mpidb_wholecell")
 NIH_SPLIT_SIZES = {"train": 19203, "val": 4178, "test": 4177}
+
+
+def variant_manifest_files(variant: str) -> list:
+    """The manifest files one variant's cells are read from (raw includes NIH)."""
+    files = {VARIANT_MANIFESTS[variant].format(dataset=d) for d in TEST_DATASETS}
+    if variant == "raw":
+        files |= {"nih_cells.csv", "nih_split.csv"}
+    return sorted(files)
 
 
 def nih_cells(split: str | None = None) -> pd.DataFrame:

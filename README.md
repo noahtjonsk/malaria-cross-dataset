@@ -32,11 +32,12 @@ python scripts/build_colour_crops.py          # Reinhard + histogram matching to
 # models: smoke checks on the laptop, real runs on Colab (notebooks/10_train_colab.ipynb)
 python scripts/train.py --arch vgg16 --smoke --no-pretrained
 python scripts/evaluate.py --checkpoint models/vgg16_s0_smoke.pt --smoke
-python scripts/pack_for_colab.py --variants raw                      # -> colab/data_raw.zip, code.zip
-python scripts/pack_for_colab.py --variants masked reinhard histmatch
-python scripts/train.py --arch vgg16 --seed 0 --resume               # on Colab
+python scripts/pack_for_colab.py                                     # -> colab/code.zip, data_raw.zip, data_rq2.zip
+# on Colab (notebooks/10_train_colab.ipynb), for each of vgg16, resnet50, mobilenet_v2:
+python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0                 # rq1/rq2/rq3 tables + R_ figure
+python scripts/compare_models.py                                     # RQ1: paired differences in drop
 # D3 Methodology Overview (TinyTeX: pdflatex + biber, classicthesis like the lit review)
 python scripts/make_mo_figures.py
 cd docs/methodology && pdflatex mo && biber mo && pdflatex mo && pdflatex mo
