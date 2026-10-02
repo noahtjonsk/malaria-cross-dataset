@@ -103,7 +103,9 @@ def main() -> None:
         if ran:
             info["variants"][variant] = {
                 "commit": provenance.git_commit(),
-                "manifests": provenance.manifest_hashes(variant_manifest_files(variant))}
+                "manifests": provenance.manifest_hashes(variant_manifest_files(variant)),
+                # from the unzipped data zip on Colab; the laptop's own crops have none
+                "crops": provenance.packed_crop_digests().get(variant, "local")}
         elif variant not in info["variants"]:
             print(f"  warning: {variant} predictions predate run.json; "
                   "rerun with --force to record which crops they came from")

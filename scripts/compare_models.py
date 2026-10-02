@@ -12,7 +12,7 @@ resample draws the same NIH patients and the same test photographs for both
 difference means model A loses more than model B.
 
 Refuses to compare models whose raw predictions came from different manifests
-(run.json, written by evaluate.py), or whose cells differ.
+or crop contents (run.json, written by evaluate.py), or whose cells differ.
 
 Writes outputs/tables/rq1_compare_<name>.csv and outputs/figures/R_compare_<name>.png
 """
@@ -45,9 +45,9 @@ def check_same_inputs(models: list, sets: dict) -> None:
         if raw is None:
             raise SystemExit(f"{m}: no run.json entry for the raw variant; "
                              "rerun evaluate.py --force so its inputs are recorded")
-        hashes[m] = raw["manifests"]
+        hashes[m] = {**raw["manifests"], "crops": raw.get("crops", "unrecorded")}
     if len({tuple(sorted(h.items())) for h in hashes.values()}) > 1:
-        raise SystemExit(f"models were scored on different manifests: {hashes}")
+        raise SystemExit(f"models were scored on different manifests or crops: {hashes}")
     first = models[0]
     for name in REPORTED_SETS:
         for m in models[1:]:
