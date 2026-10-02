@@ -42,6 +42,8 @@ python scripts/make_mo_figures.py
 cd docs/methodology && pdflatex mo && biber mo && pdflatex mo && pdflatex mo
 ```
 
+The Methodology Overview (D3) is [`docs/methodology_overview.md`](docs/methodology_overview.md);
+the LaTeX/PDF files in `docs/methodology/` are its earlier versions.
 The ELSA checklist (D5, deon plus project items and mitigations) is `docs/elsa_checklist.md`.
 
 ## Where to look at the cells
