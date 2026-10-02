@@ -25,6 +25,7 @@ code.zip is the package, scripts, notebooks and tracked manifests, for when
 the notebook is not cloning the code from GitHub.
 """
 import argparse
+import hashlib
 import sys
 import zipfile
 from pathlib import Path
@@ -66,20 +67,21 @@ def data_files(variants) -> tuple:
     return sorted(set(files)), sorted(manifests), crops
 
 
-def provenance_text(manifests: list, crops: dict | None = None) -> str:
-    lines = [f"commit {provenance.git_commit()}"]
-    lines += [f"manifest {n} {h}" for n, h in provenance.manifest_hashes(manifests).items()]
-    for variant, c in (crops or {}).items():
-        print(f"  hashing {len(c):,} {variant} crops")
-        lines.append(f"crops {variant} {provenance.crop_digest(c)}")
-    return "".join(line + "\n" for line in lines)
-
-
-def write_zip(dst: Path, files: list, compress: bool, text: str) -> None:
+def write_zip(dst: Path, files: list, compress: bool, manifests: list,
+              crops: dict | None = None) -> None:
+    """Zip `files` plus PROVENANCE_<zip>.txt. Each file is read once, and hashed
+    from the same bytes, so the crop digests cost no second pass over the disk."""
     mode = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+    hashes = {}
     with zipfile.ZipFile(dst, "w", mode) as z:
         for f in files:
-            z.write(paths.ROOT / f, f)
+            data = (paths.ROOT / f).read_bytes()
+            hashes[f] = hashlib.sha256(data).hexdigest()
+            z.writestr(zipfile.ZipInfo.from_file(paths.ROOT / f, f), data, compress_type=mode)
+        lines = [f"commit {provenance.git_commit()}"]
+        lines += [f"manifest {n} {h}" for n, h in provenance.manifest_hashes(manifests).items()]
+        lines += [f"crops {v} {provenance.crop_digest(c, hashes)}" for v, c in (crops or {}).items()]
+        text = "".join(line + "\n" for line in lines)
         z.writestr(f"PROVENANCE_{dst.stem}.txt", text)
     print(f"wrote {dst} ({dst.stat().st_size / 1e9:.2f} GB, {len(files):,} files)")
     print(text, end="")
@@ -106,10 +108,9 @@ def main() -> None:
         return
     OUT.mkdir(exist_ok=True)
     for g, (files, manifests, crops) in packs.items():
-        write_zip(OUT / ZIP_NAMES[g], files, compress=False,
-                  text=provenance_text(manifests, crops))
+        write_zip(OUT / ZIP_NAMES[g], files, compress=False, manifests=manifests, crops=crops)
     write_zip(OUT / "code.zip", code, compress=True,
-              text=provenance_text(["nih_split.csv", "mpidb_stage_audit.csv"]))
+              manifests=["nih_split.csv", "mpidb_stage_audit.csv"])
 
 
 if __name__ == "__main__":

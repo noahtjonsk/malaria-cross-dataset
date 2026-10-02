@@ -35,12 +35,14 @@ def git_commit() -> str:
         return "unknown"
 
 
-def crop_digest(rel_paths) -> str:
-    """One hash over the contents of every crop (sorted paths), 12 hex digits."""
+def crop_digest(rel_paths, known: dict | None = None) -> str:
+    """One hash over the contents of every crop (sorted paths), 12 hex digits.
+    `known` maps paths to full SHA-256 hex digests already computed."""
+    known = known or {}
     h = hashlib.sha256()
     for p in sorted(set(rel_paths)):
         h.update(p.encode())
-        h.update(bytes.fromhex(file_hash_full(paths.ROOT / p)))
+        h.update(bytes.fromhex(known.get(p) or file_hash_full(paths.ROOT / p)))
     return h.hexdigest()[:12]
 
 
