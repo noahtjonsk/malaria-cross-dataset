@@ -91,9 +91,24 @@ def without_nearest(sets: dict) -> dict:
             for k, s in sets.items()}
 
 
+def check_same_cells(variant_sets: dict) -> None:
+    """Every RQ2 variant must hold the same cells, so variants are compared on
+    one population and their resamples (keyed by set name) line up."""
+    first, *rest = variant_sets
+    for v in rest:
+        for k, s in variant_sets[v].items():
+            ref = variant_sets[first][k]["cell_id"]
+            if not np.array_equal(np.sort(s["cell_id"].to_numpy()), np.sort(ref.to_numpy())):
+                raise SystemExit(f"{v} and {first} have different cells in {k}")
+
+
 def rq2_table(variant_sets: dict, nih_test: pd.DataFrame, ref: dict, keep=None) -> pd.DataFrame:
     """Every variant against the same NIH reference, plus the share of the drop
-    recovered. `keep` filters the test sets identically in every variant."""
+    recovered. `keep` filters the test sets identically in every variant.
+
+    Shares are left undefined where the raw drop's 95% interval reaches zero
+    (metrics.share_recovered): there is no measurable drop to recover."""
+    check_same_cells(variant_sets)
     frames = []
     for v, sets in variant_sets.items():
         sets = {k: s for k, s in sets.items() if k != "nih_test"}
@@ -101,16 +116,17 @@ def rq2_table(variant_sets: dict, nih_test: pd.DataFrame, ref: dict, keep=None) 
         frames.append(t[t["test_set"] != "nih_test"].assign(variant=v))
     t = pd.concat(frames, ignore_index=True)
     holdout = {m: pt for m, (pt, _) in ref.items()}
-    by_key = t.set_index(["variant", "test_set", "metric"])["value"]
+    by_key = t.set_index(["variant", "test_set", "metric"])
 
-    def value(variant, r):
-        return by_key.get((variant, r.test_set, r.metric), np.nan)
+    def value(variant, r, col="value"):
+        key = (variant, r.test_set, r.metric)
+        return by_key[col].get(key, np.nan)
 
     total, step = [], []
     for r in t.itertuples():
-        h, raw = holdout[r.metric], value("raw", r)
-        s_mask = share_recovered(h, raw, value("masked", r))
-        s_total = share_recovered(h, raw, r.value)
+        h, raw, lo = holdout[r.metric], value("raw", r), value("raw", r, "drop_ci_low")
+        s_mask = share_recovered(h, raw, value("masked", r), lo)
+        s_total = share_recovered(h, raw, r.value, lo)
         if r.variant == "raw":
             total.append(np.nan)
             step.append(np.nan)

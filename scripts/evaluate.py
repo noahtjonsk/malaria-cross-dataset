@@ -20,10 +20,12 @@ Variants (RQ2 steps, applied to the external sets only)
     histmatch   then colour-matched by histogram matching
 
 Writes outputs/predictions/<arch>_s<seed>/<variant>_<set>.csv: the manifest
-columns plus `prob`, one row per cell. A prediction file that already exists is
-kept (so a disconnected run resumes where it stopped) unless --force is given.
-run.json in the same folder records the checkpoint settings, and for each
-variant the code commit and the hashes of the manifests its cells came from.
+columns plus `prob`, one row per cell. run.json in the same folder records, for
+every prediction file, the checkpoint's hash, the manifest hashes, a digest of
+the contents of the crops it scored, the cell count and the code commit. A file
+is kept on a rerun (so a disconnected run resumes where it stopped) only if all
+of these still match; otherwise, or with --force, it is redone. Files are
+written to a temporary name and renamed, so a disconnect never leaves half a file.
 """
 import argparse
 import json
@@ -78,38 +80,54 @@ def main() -> None:
     print(f"{tag}: best epoch {ck['epoch']}, val loss {ck['val']['loss']:.4f}, on {device}")
 
     info_path = out_dir / "run.json"
-    info = json.loads(info_path.read_text()) if info_path.exists() else {"variants": {}}
+    info = json.loads(info_path.read_text()) if info_path.exists() else {}
+    info.setdefault("files", {})
     info.update(checkpoint=args.checkpoint.name, settings=s, best_epoch=ck["epoch"],
-                val=ck["val"], smoke_eval=args.smoke)
+                val=ck["val"])
+    ck_sha = provenance.file_hash(args.checkpoint)
     for variant in args.variants:
+        manifests = provenance.manifest_hashes(variant_manifest_files(variant))
         jobs = ([("nih_test", lambda: nih_cells("test"))] if variant == "raw" else [])
         jobs += [(d, lambda d=d: test_cells(d, variant)) for d in TEST_DATASETS]
-        ran = False
         for name, cells_fn in jobs:
             dst = out_dir / f"{variant}_{name}.csv"
-            if dst.exists() and not args.force:
-                print(f"  {variant:9s} {name:16s} exists, kept (--force to redo)")
-                continue
             cells = cells_fn()
             if args.smoke:
                 cells = cells.sample(min(64, len(cells)), random_state=0)
             cells = cells.reset_index(drop=True).copy()
+            # What this file must have come from: this checkpoint, these
+            # manifests and the contents of exactly these crops.
+            record = {"checkpoint_sha": ck_sha, "best_epoch": ck["epoch"],
+                      "manifests": manifests, "crops": provenance.crop_digest(cells["path"]),
+                      "n_cells": len(cells), "smoke": args.smoke}
+            old = info["files"].get(dst.name, {})
+            same = (all(old.get(k) == v for k, v in record.items())
+                    and dst.exists() and csv_rows(dst) == len(cells))
+            if same and not args.force:
+                print(f"  {variant:9s} {name:16s} up to date, kept (--force to redo)")
+                continue
             cells["prob"] = predict(net, cells, device, args.batch_size, args.workers)
-            cells.to_csv(dst, index=False)
-            ran = True
+            tmp = dst.with_name(dst.name + ".tmp")     # a disconnect leaves no half file
+            cells.to_csv(tmp, index=False)
+            tmp.replace(dst)
+            info["files"][dst.name] = {**record, "commit": provenance.git_commit()}
+            write_json_atomic(info_path, info)
             called = (cells["prob"] >= THRESHOLD).mean()
             print(f"  {variant:9s} {name:16s} {len(cells):6,} cells  "
                   f"{100 * called:5.1f}% called parasitised -> {dst.name}")
-        if ran:
-            info["variants"][variant] = {
-                "commit": provenance.git_commit(),
-                "manifests": provenance.manifest_hashes(variant_manifest_files(variant)),
-                # from the unzipped data zip on Colab; the laptop's own crops have none
-                "crops": provenance.packed_crop_digests().get(variant, "local")}
-        elif variant not in info["variants"]:
-            print(f"  warning: {variant} predictions predate run.json; "
-                  "rerun with --force to record which crops they came from")
-    info_path.write_text(json.dumps(info, indent=1, default=str))
+    write_json_atomic(info_path, info)
+
+
+def csv_rows(path: Path) -> int:
+    """Data rows in a prediction CSV (no field holds a line break)."""
+    with open(path, "rb") as f:
+        return sum(1 for _ in f) - 1
+
+
+def write_json_atomic(path: Path, obj) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(obj, indent=1, default=str))
+    tmp.replace(path)
 
 
 if __name__ == "__main__":

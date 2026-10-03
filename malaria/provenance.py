@@ -23,9 +23,13 @@ def git_commit() -> str:
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=paths.ROOT,
                              capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
-                               cwd=paths.ROOT, capture_output=True, text=True,
-                               check=True).stdout.strip()
+        # Dirty: uncommitted changes to tracked files, or untracked code that
+        # pack_for_colab.py would still pack (malaria/*.py, scripts/*.py).
+        status = [["git", "status", "--porcelain", "--untracked-files=no"],
+                  ["git", "status", "--porcelain", "--untracked-files=all", "--",
+                   "malaria", "scripts"]]
+        dirty = any(subprocess.run(cmd, cwd=paths.ROOT, capture_output=True, text=True,
+                                   check=True).stdout.strip() for cmd in status)
         return sha + ("+dirty" if dirty else "")
     except (OSError, subprocess.CalledProcessError):
         if PROVENANCE_CODE.exists():

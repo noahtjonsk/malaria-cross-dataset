@@ -11,8 +11,10 @@ Task: binary classification of single-cell images, parasitised = positive class.
 - Drop: value on the NIH hold-out set minus value on a test set, in
   percentage points.
 - Share recovered (RQ2): (value after matching - value before) / drop.
-  Undefined (NaN) when the drop is zero or negative: there is nothing to
-  recover, and dividing by a tiny drop would produce meaningless shares.
+  Undefined (NaN) unless the drop is clearly above zero, i.e. the lower end of
+  its 95% interval is positive: with no measurable drop there is nothing to
+  recover, and dividing by a drop near zero gives meaningless shares (e.g. -62
+  on a 1.5-point drop whose interval includes 0).
 - Uncertainty: 95% percentile intervals from resampling *source images*,
   because cells cut from one photograph share its stain, focus and lighting and
   are not independent. A cell-level bootstrap would give intervals that are too
@@ -28,7 +30,6 @@ import zlib
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 from sklearn.metrics import roc_auc_score
 
 THRESHOLD = 0.5
@@ -36,7 +37,6 @@ N_BOOT = 2000
 ALPHA = 0.05
 BOOT_SEED = 0
 REFERENCE_CLUSTER = "patient_id"   # NIH hold-out; test sets resample source images
-AUC_CHUNK = 200                    # bootstrap draws per AUC block (memory only)
 
 
 def resample_weights(clusters, name: str, n_boot: int = N_BOOT) -> tuple:
@@ -63,24 +63,24 @@ def _weighted_auc(y, p, ci, n_clusters: int, weights: np.ndarray) -> np.ndarray:
     """AUC for each row of cluster weights, as if every cell were repeated as
     often as its cluster was drawn (Mann-Whitney statistic, ties count half).
 
-    The scores are sorted once; each resample then costs a sparse product and a
-    cumulative sum instead of a fresh sort of every cell.
+    The numerator is bilinear in the weights: w' A w, where A[c, d] counts the
+    (positive in cluster c, negative in cluster d) pairs the positive wins, ties
+    counting half. A is built once (one sorted search per cluster), so every
+    resample costs a small matrix product, with memory n_clusters^2.
     """
-    order = np.argsort(p, kind="mergesort")
-    _, g = np.unique(p[order], return_inverse=True)       # tie groups, ascending score
-    y, c = y[order], ci[order]
-    shape = (int(g.max()) + 1, n_clusters)
-    # Transposed (tie group x cluster) counts of positives and negatives.
-    pos = sparse.csr_matrix((np.ones(int((y == 1).sum())), (g[y == 1], c[y == 1])), shape=shape)
-    neg = sparse.csr_matrix((np.ones(int((y == 0).sum())), (g[y == 0], c[y == 0])), shape=shape)
-    out = np.empty(len(weights))
-    for i in range(0, len(weights), AUC_CHUNK):
-        w = weights[i:i + AUC_CHUNK].astype(float).T          # cluster x draw
-        P, N = np.asarray(pos @ w).T, np.asarray(neg @ w).T   # draw x tie group
-        below = np.cumsum(N, axis=1) - N                    # negatives scored lower
-        with np.errstate(invalid="ignore", divide="ignore"):
-            out[i:i + AUC_CHUNK] = (P * (below + 0.5 * N)).sum(1) / (P.sum(1) * N.sum(1))
-    return out
+    pos, neg = y == 1, y == 0
+    pc, pp = ci[pos], p[pos]
+    A = np.zeros((n_clusters, n_clusters))
+    for d in np.unique(ci[neg]):
+        s = np.sort(p[neg & (ci == d)])
+        lower = np.searchsorted(s, pp, side="left")
+        tied = np.searchsorted(s, pp, side="right") - lower
+        A[:, d] = np.bincount(pc, weights=lower + 0.5 * tied, minlength=n_clusters)
+    n_pos = np.bincount(pc, minlength=n_clusters)
+    n_neg = np.bincount(ci[neg], minlength=n_clusters)
+    w = weights.astype(float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return ((w @ A) * w).sum(1) / ((w @ n_pos) * (w @ n_neg))
 
 
 def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
@@ -122,12 +122,13 @@ def reference_draws(pred: pd.DataFrame, name: str = "nih_test") -> dict:
     return bootstrap(pred, name, cluster=REFERENCE_CLUSTER)
 
 
-def interval(draws: np.ndarray) -> tuple:
+def interval(draws: np.ndarray, alpha: float = ALPHA) -> tuple:
+    """Percentile interval at level 1 - alpha, ignoring NaN draws."""
     d = np.asarray(draws, dtype=float)
     d = d[~np.isnan(d)]
     if not len(d):
         return float("nan"), float("nan")
-    return (float(np.quantile(d, ALPHA / 2)), float(np.quantile(d, 1 - ALPHA / 2)))
+    return (float(np.quantile(d, alpha / 2)), float(np.quantile(d, 1 - alpha / 2)))
 
 
 def drop_pp(holdout: float, test: float) -> float:
@@ -141,10 +142,14 @@ def drop_draws(ref: dict, test: dict, metric: str) -> tuple:
     return drop_pp(rp, tp), 100.0 * (rd - td)
 
 
-def share_recovered(holdout: float, before: float, after: float) -> float:
-    """(after - before) / drop, NaN when the drop is not positive."""
+def share_recovered(holdout: float, before: float, after: float,
+                    drop_ci_low: float | None = None) -> float:
+    """(after - before) / drop, NaN when the drop is not positive or, given the
+    lower end of its 95% interval (pp), when that interval reaches zero."""
     drop = holdout - before
     if not np.isfinite(drop) or drop <= 0:
+        return float("nan")
+    if drop_ci_low is not None and not drop_ci_low > 0:
         return float("nan")
     return (after - before) / drop
 
@@ -202,12 +207,22 @@ def self_test() -> None:
     rep = np.repeat(np.arange(len(d)), w[0][np.searchsorted(ids, d["source_image"].astype(str))])
     assert abs(b["auc"][1][0] - roc_auc_score(d["label_binary"].iloc[rep],
                                               d["prob"].iloc[rep])) < 1e-12
+    # A resample without one of the classes has no AUC.
+    y, p = d["label_binary"].to_numpy(), d["prob"].to_numpy()
+    ci = np.searchsorted(ids, d["source_image"].astype(str))
+    only_pos = np.isin(np.arange(len(ids)), np.unique(ci[y == 1])) & ~np.isin(
+        np.arange(len(ids)), np.unique(ci[y == 0]))
+    if only_pos.any():
+        assert np.isnan(_weighted_auc(y, p, ci, len(ids), only_pos[None, :].astype(int))[0])
+    assert np.isnan(_weighted_auc(y, p, ci, len(ids), np.zeros((1, len(ids))))[0])
     # Same set, same draws (paired); a differently named set is independent.
     b2 = bootstrap(d.copy(), "check")
     assert all(np.array_equal(b[k][1], b2[k][1], equal_nan=True) for k in b)
     assert not np.array_equal(b["auc"][1], bootstrap(d, "other set")["auc"][1])
     assert share_recovered(0.9, 0.6, 0.75) == 0.5
     assert np.isnan(share_recovered(0.9, 0.95, 0.97))
+    assert np.isnan(share_recovered(0.9, 0.6, 0.75, drop_ci_low=-0.5))
+    assert share_recovered(0.9, 0.6, 0.75, drop_ci_low=20.0) == 0.5
     print("metrics self-test passed")
 
 

@@ -149,6 +149,15 @@ def main() -> None:
     state = {"epoch": 0, "best_val_loss": float("inf"), "bad_epochs": 0, "history": []}
     if args.resume and last_path.exists():
         ck = torch.load(last_path, map_location=device, weights_only=False)
+        # A run continues only with the settings it started with; the commit it
+        # started at is kept, and each resume adds the commit it resumed at.
+        commit_keys = ("git_commit", "resumed_at")
+        old = {k: v for k, v in ck["settings"].items() if k not in commit_keys}
+        new = {k: v for k, v in settings.items() if k not in commit_keys}
+        if old != new:
+            raise SystemExit(f"--resume with different settings: {old} vs {new}")
+        settings["resumed_at"] = [*ck["settings"].get("resumed_at", []), settings["git_commit"]]
+        settings["git_commit"] = ck["settings"].get("git_commit", "unknown")
         net.load_state_dict(ck["model"])
         optimiser.load_state_dict(ck["optimiser"])
         scaler.load_state_dict(ck["scaler"])

@@ -11,6 +11,10 @@ resample draws the same NIH patients and the same test photographs for both
 (metrics.resample_weights is keyed by the set, not the model). A positive
 difference means model A loses more than model B.
 
+With 3 models there are 24 such rows, so besides each 95% interval the table
+gives a Bonferroni-adjusted interval (level 1 - 0.05/m for m rows); a
+difference is flagged only when that adjusted interval excludes 0.
+
 Refuses to compare models whose raw predictions came from different manifests
 or crop contents (run.json, written by evaluate.py), or whose cells differ.
 
@@ -31,24 +35,24 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from malaria import paths, plots  # noqa: E402
-from malaria.metrics import bootstrap, drop_draws, interval, reference_draws  # noqa: E402
+from malaria.metrics import (ALPHA, bootstrap, drop_draws, interval,  # noqa: E402
+                             reference_draws)
 from malaria.models import ARCHS  # noqa: E402
-from malaria.results import REPORTED_SETS, SET_COLOURS, load, run_info  # noqa: E402
+from malaria.results import REPORTED_SETS, SET_COLOURS, input_records, load  # noqa: E402
 
 
 def check_same_inputs(models: list, sets: dict) -> None:
-    """Same manifests (run.json) and the same cells, set by set, for every model."""
-    hashes = {}
-    for m in models:
-        info = run_info(m)
-        raw = (info or {}).get("variants", {}).get("raw")
-        if raw is None:
-            raise SystemExit(f"{m}: no run.json entry for the raw variant; "
-                             "rerun evaluate.py --force so its inputs are recorded")
-        hashes[m] = {**raw["manifests"], "crops": raw.get("crops", "unrecorded")}
-    if len({tuple(sorted(h.items())) for h in hashes.values()}) > 1:
-        raise SystemExit(f"models were scored on different manifests or crops: {hashes}")
+    """Same manifests and crop contents (run.json) and the same cells, set by
+    set, for every model."""
+    try:
+        records = {m: input_records(m, "raw") for m in models}
+    except ValueError as e:
+        raise SystemExit(str(e))
     first = models[0]
+    for m in models[1:]:
+        if records[m] != records[first]:
+            raise SystemExit(f"{m} and {first} were scored on different manifests or "
+                             f"crops: {records[m]} vs {records[first]}")
     for name in REPORTED_SETS:
         for m in models[1:]:
             if not sets[m][name]["cell_id"].equals(sets[first][name]["cell_id"]):
@@ -77,24 +81,31 @@ def main() -> None:
                 if np.isfinite(point):
                     drops[m, name, metric] = drop_draws(ref, res, metric)
 
+    cells = list(dict.fromkeys((s, k) for _, s, k in drops))
+    pairs = list(itertools.combinations(args.models, 2))
+    alpha_adj = ALPHA / (len(cells) * len(pairs))      # Bonferroni over every row
     rows = []
-    for (name, metric) in dict.fromkeys((s, k) for _, s, k in drops):
-        for a, b in itertools.combinations(args.models, 2):
+    for (name, metric) in cells:
+        for a, b in pairs:
             (da, wa), (db, wb) = drops[a, name, metric], drops[b, name, metric]
             lo, hi = interval(wa - wb)
+            alo, ahi = interval(wa - wb, alpha_adj)
             dlo_a, dhi_a = interval(wa)
             dlo_b, dhi_b = interval(wb)
             rows.append({"test_set": name, "metric": metric, "model_a": a, "model_b": b,
                          "drop_a": da, "drop_a_ci_low": dlo_a, "drop_a_ci_high": dhi_a,
                          "drop_b": db, "drop_b_ci_low": dlo_b, "drop_b_ci_high": dhi_b,
                          "diff_pp": da - db, "diff_ci_low": lo, "diff_ci_high": hi,
-                         "interval_excludes_0": bool(lo > 0 or hi < 0)})
+                         "diff_adj_ci_low": alo, "diff_adj_ci_high": ahi,
+                         "adj_interval_excludes_0": bool(alo > 0 or ahi < 0)})
     out = pd.DataFrame(rows)
     paths.TABLES.mkdir(parents=True, exist_ok=True)
     dst = paths.TABLES / f"rq1_compare_{args.name}.csv"
     out.to_csv(dst, index=False)
+    print(f"Bonferroni: {len(out)} rows, adjusted intervals at {100 * (1 - alpha_adj):.2f}%")
     print(out[["test_set", "metric", "model_a", "model_b", "diff_pp", "diff_ci_low",
-               "diff_ci_high"]].round(2).to_string(index=False))
+               "diff_ci_high", "diff_adj_ci_low", "diff_adj_ci_high"]].round(2)
+          .to_string(index=False))
     print(f"wrote {dst.name}")
     figure(drops, args.models, args.name)
 

@@ -42,14 +42,24 @@ def prediction_files(tag: str, variant: str) -> dict:
 
 
 def load(tag: str, variant: str) -> dict:
-    """{set name: predictions} for one run and variant; raises if a file is missing."""
+    """{set name: predictions} for one run and variant.
+
+    Raises if a file is missing, or if its row count differs from the count
+    evaluate.py recorded for it (a truncated or replaced file).
+    """
     files = prediction_files(tag, variant)
     missing = [str(f) for f in files.values() if not f.exists()]
     if missing:
         raise FileNotFoundError(f"{tag} {variant}: missing {missing}")
-    sets = split_sets(pd.read_csv(files["bbbc041"]), pd.read_csv(files["mpidb_wholecell"]))
+    frames = {n: pd.read_csv(f) for n, f in files.items()}
+    recorded = (run_info(tag) or {}).get("files", {})
+    for n, f in files.items():
+        expected = recorded.get(f.name, {}).get("n_cells")
+        if expected is not None and len(frames[n]) != expected:
+            raise ValueError(f"{f}: {len(frames[n])} rows, run.json recorded {expected}")
+    sets = split_sets(frames["bbbc041"], frames["mpidb_wholecell"])
     if variant == "raw":
-        sets = {"nih_test": pd.read_csv(files["nih_test"]), **sets}
+        sets = {"nih_test": frames["nih_test"], **sets}
     return sets
 
 
@@ -57,3 +67,22 @@ def run_info(tag: str) -> dict | None:
     """evaluate.py's record of the checkpoint and inputs, if it wrote one."""
     f = paths.PREDICTIONS / tag / "run.json"
     return json.loads(f.read_text()) if f.exists() else None
+
+
+def input_records(tag: str, variant: str) -> dict:
+    """{prediction file name: {"manifests", "crops"}} that a run's files came from.
+
+    Reads the per-file records evaluate.py now writes; for runs evaluated before
+    those existed (the seed-0 baseline) it falls back to the per-variant record,
+    whose crop digest was taken from the data zip. Raises if neither exists or
+    the crops were not recorded, so placeholders can never count as a match.
+    """
+    info = run_info(tag) or {}
+    out = {}
+    for f in prediction_files(tag, variant).values():
+        rec = info.get("files", {}).get(f.name) or info.get("variants", {}).get(variant)
+        if not rec or rec.get("crops") in (None, "local", "unrecorded"):
+            raise ValueError(f"{tag}: no input record with a crop digest for {f.name}; "
+                             "rerun evaluate.py --force")
+        out[f.name] = {"manifests": rec["manifests"], "crops": rec["crops"]}
+    return out
