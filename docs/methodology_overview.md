@@ -16,7 +16,7 @@ This Methodology Overview (MO) describes how the project is carried out: where t
 - the project requirements and run order, [`README.md`](../README.md), with pinned packages in [`requirements.txt`](../requirements.txt)
 - the exploratory data analysis, [`notebooks/03_eda_short.ipynb`](../notebooks/03_eda_short.ipynb) (code-free copy [`outputs/03_eda_short.html`](../outputs/03_eda_short.html)); the full record is [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb)
 - the ELSA checklist (D5), [`docs/elsa_checklist.md`](elsa_checklist.md)
-- the preliminary results in §9 of this document, from [`outputs/tables/rq1_vgg16_s0.csv`](../outputs/tables/rq1_vgg16_s0.csv), [`rq2_vgg16_s0.csv`](../outputs/tables/rq2_vgg16_s0.csv) and [`rq3_vgg16_s0.csv`](../outputs/tables/rq3_vgg16_s0.csv)
+- the preliminary results in §9 of this document, from `outputs/tables/rq{1,2,3}_<model>_s0.csv` for the three models and the model comparison [`rq1_compare_s0.csv`](../outputs/tables/rq1_compare_s0.csv)
 - earlier versions of this MO: the formative PDF [`MethodologyOverview_NoahTjonSienKie.pdf`](methodology/MethodologyOverview_NoahTjonSienKie.pdf) and the corrected [`MethodologyOverview_NoahTjonSienKie_v2.pdf`](methodology/MethodologyOverview_NoahTjonSienKie_v2.pdf)
 
 In short, three ImageNet-pretrained convolutional networks (VGG-16, ResNet-50 and MobileNetV2) are fine-tuned on NIH single-cell images of *P. falciparum* from Chittagong (Rajaraman et al., 2018). They are then applied, without fine-tuning, to two external test sets: BBBC041, *P. vivax* from two acquisition batches (Ljosa et al., 2012; Hung & Carpenter, 2017), and MP-IDB, four species from Lausanne (Loddo et al., 2019). RQ1 measures how much sensitivity and specificity each model loses. RQ2 changes only the test cells, first removing the background and then matching stain colour to NIH, and measures how much of the loss each step recovers. RQ3 breaks the misses down by species and life stage. The trained models never change after RQ1, so any change in RQ2 can be attributed to the step that caused it.
@@ -44,9 +44,9 @@ flowchart TB
     C["C. Patient-grouped split<br/>NIH 70/15/15 by patient<br/>pinned in nih_split.csv<br/>malaria/splits.py"]
     D["D. EDA<br/>per-cell brightness, colour,<br/>sharpness, size<br/>compute_stats.py, 03_eda_short"]
     F["F. Test inputs<br/>F0 raw crops (RQ1)<br/>F1 background removed (RQ2)<br/>F2 colour matched: Reinhard<br/>or histogram matching (RQ2)<br/>build_masked_crops.py<br/>build_colour_crops.py"]
-    E["E. Fine-tuning on NIH train<br/>E1 VGG-16 (baseline)<br/>E2 ResNet-50, E3 MobileNetV2<br/>all layers trained,<br/>early stopping on NIH val<br/>train.py"]
+    E["E. Fine-tuning on NIH train<br/>E1 VGG-16, E2 ResNet-50,<br/>E3 MobileNetV2 (the baseline)<br/>all layers trained,<br/>early stopping on NIH val<br/>train.py"]
     G["G. Frozen inference<br/>NIH hold-out, BBBC041 site_a/site_b,<br/>MP-IDB; threshold 0.5<br/>evaluate.py"]
-    H["H. Metrics and error analysis<br/>H1 drop (RQ1)<br/>H2 share recovered (RQ2)<br/>H3 species and stage (RQ3)<br/>image-resampled 95% intervals<br/>metrics.py, summarise_results.py"]
+    H["H. Metrics and error analysis<br/>H1 drop (RQ1)<br/>H2 share recovered (RQ2)<br/>H3 species and stage (RQ3)<br/>image-resampled 95% intervals<br/>metrics.py, summarise_results.py,<br/>compare_models.py"]
     A --> B --> C --> D
     B --> F
     C --> E
@@ -195,7 +195,10 @@ There is no separate test suite. The checks run inside the pipeline (Beaulieu-Jo
 | Unlabelled or excluded rows never reach a model | `data.CellDataset`, `data.test_cells` |
 | Reframing keeps every MP-IDB parasite, stage label and cell ID | `build_crops.py --mpidb-wholecell` |
 | Colour-matched manifests keep the row count of their input | `build_colour_crops.py` |
-| Metrics on a perfect predictor: sensitivity and specificity 1, drop 0 | `python -m malaria.metrics` |
+| Metrics on a perfect predictor: sensitivity and specificity 1, drop 0; the weighted AUC equals scikit-learn's, ties included | `python -m malaria.metrics` |
+| A prediction file is reused only if its checkpoint, manifests, crop contents and row count still match; files are written atomically | `evaluate.py`, `results.load` |
+| Models are compared only if they were scored on the same manifests, crop contents and cells | `compare_models.check_same_inputs` |
+| RQ2 variants hold the same cells | `summarise_results.check_same_cells` |
 
 ## §4. Test-time transformations for RQ2 (Stage F)
 
@@ -226,20 +229,30 @@ RQ1 compares one lightweight and two heavy architectures, all built by `models.b
 
 | Arm | Model | Parameters (with new head) | Rationale |
 |---|---|---:|---|
-| E1 | VGG-16 (Simonyan & Zisserman, 2015) | 134.3 M | Baseline and first model trained, as the supervisor asked; plain stacked convolutions |
+| E1 | VGG-16 (Simonyan & Zisserman, 2015) | 134.3 M | Plain stacked convolutions; trained first, as the supervisor asked |
 | E2 | ResNet-50 (He et al., 2016) | 23.5 M | Residual network; the standard heavy contender |
 | E3 | MobileNetV2 (Sandler et al., 2018) | 2.2 M | The lighter architecture RQ1 asks about |
 
 Every arm is trained on the same rows with the same schedule, so the architecture is the only thing that changes between them.
 
-### Baseline: VGG-16, fully fine-tuned (E1)
+### Baseline protocol: three architectures, fully fine-tuned (E1 to E3)
 
-- *Architecture.* torchvision `vgg16` with `IMAGENET1K_V1` weights. The last classifier layer, `classifier[6]`, is replaced by a 4096 → 1 linear layer whose output is the logit for *parasitised*.
-- *Fine-tuning.* All 134,264,641 parameters are trained; no layer is frozen, and `check_all_trainable` asserts this before and after training.
+Following the literature review (§2.3), the baseline is the patient-grouped protocol of Hou et al. (2026) applied to all three architectures, not one model. VGG-16 was trained first, at the supervisor's request, and ResNet-50 and MobileNetV2 followed with identical settings.
+
+- *Architecture.* torchvision weights `IMAGENET1K_V1` for all three, so the pretraining recipe is the same generation. The last layer becomes a single-output linear layer whose output is the logit for *parasitised*: `classifier[6]` in VGG-16, `fc` in ResNet-50, `classifier[1]` in MobileNetV2.
+- *Fine-tuning.* Every parameter is trained (VGG-16 134,264,641; ResNet-50 23,510,081; MobileNetV2 2,225,153); no layer is frozen, and `check_all_trainable` asserts this before and after training.
 - *Input.* Each crop is padded to a square with black, resized to 224 × 224 and normalised with the ImageNet channel means and standard deviations (`data.pad_to_square`, `data.load_input`).
 - *Training.* Binary cross-entropy on the logit, Adam (Kingma & Ba, 2015), mixed precision on the GPU.
-- *Output.* `models/vgg16_s0.pt`, a per-epoch log ([`vgg16_s0_training_log.json`](../outputs/tables/vgg16_s0_training_log.json)) and a resumable checkpoint written after every epoch.
+- *Output.* `models/<model>_s<seed>.pt`, a per-epoch log (`outputs/tables/<model>_s0_training_log.json`) and a resumable checkpoint written after every epoch. A resumed run must have the settings it started with, and keeps the commit it started at.
 - *Where it runs.* A Colab T4 GPU through `notebooks/10_train_colab.ipynb`, which unpacks the archive built by [`scripts/pack_for_colab.py`](../scripts/pack_for_colab.py). On the laptop, `train.py --smoke` checks the same code on 64 cells.
+
+| Model | Epochs run | Best epoch | NIH validation loss | Validation sensitivity / specificity | Minutes per epoch (T4) |
+|---|---:|---:|---:|---|---:|
+| VGG-16 | 11 | 8 | 0.078 | 98.2% / 96.2% | 3.2 |
+| ResNet-50 | 9 | 6 | 0.076 | 96.6% / 97.6% | 1.8 |
+| MobileNetV2 | 9 | 6 | 0.077 | 96.5% / 98.0% | 1.3 |
+
+All three stopped early, and their best NIH validation losses differ by less than 0.002, so the three arms enter the external tests equally well fitted to NIH.
 
 ### Hyperparameters
 
@@ -274,7 +287,7 @@ No grid search or Optuna is used. Tuning each architecture separately would make
 | Intended use | Academic research into why CNN malaria classifiers lose performance across datasets |
 | Out-of-scope use | Diagnosis or screening of patients, or any clinical decision; the model has no clinical validation |
 | Known limitations | Single training site and species; no demographic variables; one seed at the midterm; MP-IDB has no uninfected cells, so specificity is measured on BBBC041 only |
-| Failure modes seen so far | Misses ring-stage parasites most often (§9); many false alarms on BBBC041 site_a; colour matching shifts scores toward *parasitised* (§9) |
+| Failure modes seen so far | Large loss of sensitivity on MP-IDB *P. falciparum* for every architecture; VGG-16 raises many false alarms on BBBC041 site_a, while ResNet-50 and MobileNetV2 miss more parasites; MobileNetV2 misses most site_b parasites; colour matching shifts scores toward *parasitised* (§9) |
 
 ## §6. Fair model comparison
 
@@ -285,7 +298,8 @@ The following are held constant across the three arms and across the RQ2 variant
 - the optimiser, learning rate, batch size and stopping rule;
 - the test cells: the same primary rows of NIH hold-out, BBBC041 site_a and site_b, MP-IDB *P. falciparum* and other species;
 - the decision threshold of 0.5, fixed before any test set was seen;
-- the metric code and the bootstrap (same seed, same resampling unit).
+- the metric code and the bootstrap: each set's resamples are keyed by its name, so every model and variant is resampled on the same NIH patients and test photographs;
+- the code commit and the inputs, checked: `run.json` records, per prediction file, the checkpoint, the manifest hashes and a digest of the crops read, and `compare_models.py` refuses models whose inputs differ.
 
 What differs between arms is the architecture, and what differs between RQ2 variants is the test input. This is what lets a difference in drop be attributed to one of the two.
 
@@ -301,11 +315,11 @@ Accuracy, F1 and AUC were considered as the main metric and rejected. At 2.7% pr
 
 ### Uncertainty
 
-Every value has a 95% percentile interval from a bootstrap that resamples *source images*, not cells (`metrics.bootstrap_rates`, 2,000 resamples; `bootstrap_auc`, 500; seed 0). Cells cut from one photograph share its stain, focus and lighting, so treating them as independent would make the intervals too narrow. The NIH hold-out set is resampled one level higher, by *patient* (30 patients, `metrics.reference_draws`), since a patient's photographs come from one slide. The test sets have no patient identifiers, so they are resampled by photograph. The interval for a drop comes from resampling the NIH hold-out set and the test set independently and taking the difference of the draws. With three seeds, the spread between runs will be reported next to these intervals.
+Every value has a 95% percentile interval from a bootstrap that resamples *source images*, not cells (`metrics.bootstrap`, 2,000 resamples for every metric). Cells cut from one photograph share its stain, focus and lighting, so treating them as independent would make the intervals too narrow. The NIH hold-out set is resampled one level higher, by *patient* (30 patients, `metrics.reference_draws`), since a patient's photographs come from one slide. The test sets have no patient identifiers, so they are resampled by photograph. The interval for a drop comes from resampling the NIH hold-out set and the test set independently and taking the difference of the draws. Each set's random stream is keyed by its name (`metrics.resample_weights`): different sets are resampled independently, while the same set is resampled identically for every model and variant, which makes differences between models paired. With three seeds, the spread between runs will be reported next to these intervals.
 
 ### Model comparison (RQ1) and ablation (RQ2)
 
-All arms are scored by `evaluate.py` on the same test sets, with the same cells and the same threshold. RQ1 compares the drops of the three architectures; the difference in drop between two architectures is to be tested with a paired bootstrap over source images, so that both models are scored on the same resampled images (open decision 3, §12). For RQ2, the frozen models score each test set on F0, F1 and both F2 variants. The *share recovered* is (value after a step − value before it) divided by the RQ1 drop, reported for each step and in total (`metrics.share_recovered`). It is left undefined when the drop is zero or negative, because then there is nothing to recover (open decision 4).
+All arms are scored by `evaluate.py` on the same test sets, with the same cells and the same threshold. RQ1 compares the drops of the three architectures. For every pair of models, test set and metric, [`scripts/compare_models.py`](../scripts/compare_models.py) gives the difference in drop with a paired bootstrap interval. With three models that is 24 comparisons, so it also gives Bonferroni-adjusted intervals (level 1 − 0.05/24), and a difference counts as clear only when the adjusted interval excludes zero (open decision 3, §12). For RQ2, the frozen models score each test set on F0, F1 and both F2 variants. The *share recovered* is (value after a step − value before it) divided by the RQ1 drop, reported for each step and in total (`metrics.share_recovered`). It is left undefined unless the raw drop is clearly above zero, i.e. the lower end of its 95% interval is positive: with no measurable drop there is nothing to recover, and dividing by a drop near zero gives meaningless shares, such as −62 on a 1.5-point drop whose interval includes zero (open decision 4).
 
 ### Error analysis (RQ3)
 
@@ -331,33 +345,73 @@ Each main design choice is set against the alternative it replaced. Most choices
 | Sensitivity and specificity at 0.5 | Accuracy, F1 or AUC alone | prevalence of 2.7 to 5.1% on BBBC041; the two errors have different clinical costs |
 | Image-level bootstrap | Cell-level bootstrap or a single test score | cells of one image are not independent; gives intervals instead of point estimates |
 
-## §9. Preliminary results (baseline VGG-16, seed 0)
+## §9. Preliminary results (baseline, seed 0)
 
-The VGG-16 baseline (E1, seed 0) was trained on a Colab T4 on 30 September 2026. Early stopping ended the run after epoch 11. The weights kept are from epoch 8 (NIH validation loss 0.078, sensitivity 98.2%, specificity 96.2%), and each epoch took about three minutes. The values below come from [`rq1_vgg16_s0.csv`](../outputs/tables/rq1_vgg16_s0.csv); Figure 6 adds the RQ2 variants from [`rq2_vgg16_s0.csv`](../outputs/tables/rq2_vgg16_s0.csv). These are single-seed results: they show that the pipeline works and how large the effects are, not the final answer to any RQ.
+The three arms were trained on a Colab T4 (VGG-16 on 30 September, ResNet-50 and MobileNetV2 on 2 October 2026) and scored on the same crops: one code commit and identical crop digests in each `outputs/tables/<model>_s0_run.json`. VGG-16 was re-scored on the rebuilt colour crops; its values moved by at most 0.02 points. These are single-seed results: they show that the pipeline works and how large the effects are, not the final answer to any RQ.
 
-| Test set | Sensitivity (95% CI) | Drop (pp) | Specificity (95% CI) | Drop (pp) |
-|---|---|---:|---|---:|
-| NIH hold-out | 98.2 (96.8 to 99.3) | ref. | 96.6 (94.7 to 98.0) | ref. |
-| BBBC041 site_a | 99.3 (98.8 to 99.7) | −1.1 | 65.5 (64.1 to 67.1) | 31.0 |
-| BBBC041 site_b | 89.8 (84.9 to 93.8) | 8.5 | 95.0 (94.0 to 95.9) | 1.5 |
-| MP-IDB *P. falciparum* | 57.4 (51.2 to 63.5) | 40.9 | n/a | n/a |
-| MP-IDB other species | 80.0 (72.4 to 86.7) | 18.2 | n/a | n/a |
+### RQ1: how large is the drop, and does the lighter architecture lose less?
 
-VGG-16 baseline applied without fine-tuning (%, fixed threshold 0.5). AUC is 0.997 on the NIH hold-out set, 0.972 on site_a and 0.975 on site_b.
+| Test set, metric | VGG-16 | ResNet-50 | MobileNetV2 |
+|---|---|---|---|
+| NIH hold-out sensitivity | 98.2 (96.8 to 99.3) | 97.2 (95.6 to 98.5) | 97.1 (95.3 to 98.2) |
+| NIH hold-out specificity | 96.6 (94.7 to 97.9) | 98.4 (97.8 to 98.9) | 98.2 (97.5 to 98.8) |
+| site_a sensitivity | 99.3 (drop −1.1) | 79.3 (drop 17.9) | 83.7 (drop 13.4) |
+| site_a specificity | 65.5 (drop 31.0) | 87.3 (drop 11.0) | 90.0 (drop 8.1) |
+| site_a AUC | 97.2 (drop 2.5) | 92.0 (drop 7.6) | 94.5 (drop 5.1) |
+| site_b sensitivity | 89.8 (drop 8.5) | 68.0 (drop 29.2) | 30.4 (drop 66.7) |
+| site_b specificity | 95.0 (drop 1.5) | 98.1 (drop 0.2) | 99.1 (drop −0.9) |
+| site_b AUC | 97.5 (drop 2.2) | 96.4 (drop 3.2) | 93.0 (drop 6.6) |
+| MP-IDB *P. falciparum* sensitivity | 57.4 (drop 40.9) | 52.6 (drop 44.6) | 28.6 (drop 68.5) |
+| MP-IDB other species sensitivity | 80.0 (drop 18.2) | 56.4 (drop 40.8) | 38.6 (drop 58.5) |
 
-![Baseline results](methodology/figures/R_vgg16_s0.png)
+Values in %, fixed threshold 0.5; drops in percentage points from the same model's NIH hold-out value. Intervals for every value and drop are in [`rq1_vgg16_s0.csv`](../outputs/tables/rq1_vgg16_s0.csv), [`rq1_resnet50_s0.csv`](../outputs/tables/rq1_resnet50_s0.csv) and [`rq1_mobilenet_v2_s0.csv`](../outputs/tables/rq1_mobilenet_v2_s0.csv).
 
-*Figure 6. Baseline results per test set. Filled circles are the raw crops (RQ1); open markers are the RQ2 variants of the same cells.*
+![Drop per architecture](../outputs/figures/R_compare_s0.png)
 
-**RQ1.** Every external set loses on at least one metric, and each loses in a different place. On site_a the model finds almost every parasite but calls 34.5% of uninfected cells parasitised (specificity drop 31.0 points). On site_b the loss is in sensitivity (8.5 points). MP-IDB *P. falciparum* has the largest drop of all, 40.9 points of sensitivity, even though it is the species NIH was trained on.
+*Figure 6. Drop from the NIH hold-out set per architecture, with 95% intervals ([`compare_models.py`](../scripts/compare_models.py)).*
 
-**RQ3.** MP-IDB sensitivity is 22.6 points *lower* for *P. falciparum* than for the pooled other species (interval −31.8 to −12.8), so the difference is larger than the resampling interval, in the opposite direction to a species effect. 1,230 of the 1,297 *P. falciparum* parasites are rings. On BBBC041, rings account for 14 of the 15 missed parasites on site_a and 22 of 31 on site_b, with miss rates of 4.0% and 13.0% against 0.1% and 5.4% for trophozoites ([`rq3_vgg16_s0.csv`](../outputs/tables/rq3_vgg16_s0.csv)).
+All three models do equally well on NIH (AUC 0.996 to 0.997), and all three lose on at least one metric on every external set, but they lose in different places. MobileNetV2, the lighter architecture, does not lose less. It loses the most sensitivity on site_b and on both MP-IDB groups, by 17.7 to 58.2 points more than the heavier models, and every one of these differences stays clear of zero after the Bonferroni adjustment (for example 27.6 points more than VGG-16 on *P. falciparum*, adjusted interval 20.5 to 34.4). On site_a the order reverses: VGG-16 loses 31.0 points of specificity, 22.9 more than MobileNetV2 (adjusted 19.8 to 25.9). VGG-16 has the smallest AUC drop on both BBBC041 sites. Of the 24 pairwise differences, 20 stay clear of zero after adjustment; the four that do not are VGG-16 against ResNet-50 on *P. falciparum* sensitivity (3.8 points, adjusted −9.0 to 1.3), site_b specificity and site_b AUC, and VGG-16 against MobileNetV2 on site_b specificity ([`rq1_compare_s0.csv`](../outputs/tables/rq1_compare_s0.csv)).
 
-A likely reading is that the model misses the smallest parasite form, the ring, wherever it occurs, and that the MP-IDB species gap is a stage-composition effect and not a species effect. With one seed this is a hypothesis for the final analysis, which can test it by comparing ring sensitivity across the two MP-IDB groups.
+Much of the difference between the architectures lies in where their scores fall relative to the 0.5 threshold. VGG-16 calls 34% of BBBC041 cells parasitised, against 14% for ResNet-50 and 11% for MobileNetV2, which is why it keeps its sensitivity and loses specificity while the other two do the opposite. AUC, which ignores the threshold, still favours VGG-16 on both sites. The answer to RQ1's second part is therefore no at the fixed threshold, with the caveat that part of the lighter model's loss is a shift of its scores toward *uninfected* on the external sets.
 
-**RQ2.** Removing the background raises MP-IDB *P. falciparum* sensitivity from 57.4% to 71.9%, recovering 36% of its drop. On site_a, though, specificity falls from 65.5% to 53.6%, and on site_b from 95.0% to 86.2%. The two colour steps move predictions in opposite directions. Reinhard transfer raises site_a specificity to 74.9%, which recovers 30% of its drop, but lowers site_a sensitivity from 99.3% to 80.5% and MP-IDB *P. falciparum* sensitivity from 71.9% to 66.4%. Histogram matching pushes almost every cell to *parasitised*: sensitivity is 99 to 100% on every set, but specificity is 5.9% on site_a and 1.1% on site_b. AUC falls under both, with Reinhard (0.972 to 0.856 on site_a, 0.975 to 0.937 on site_b) and with histogram matching (to 0.916 on site_a and 0.730 on site_b). Leaving out the 1,022 BBBC041 cells whose mask fell back to a neighbouring region changes no BBBC041 value by more than two points ([`rq2_vgg16_s0_without_nearest.csv`](../outputs/tables/rq2_vgg16_s0_without_nearest.csv)).
+### RQ3: species and life stages
 
-At the fixed threshold, the colour steps mostly move the model's scores instead of improving how well it separates the classes: AUC does not rise under either method, and Reinhard's specificity gain on site_a comes with a loss of sensitivity. This has a methodological consequence. On MP-IDB, which has no uninfected cells, a higher sensitivity cannot tell a better model from one that calls more cells parasitised. For the final analysis, RQ2's share recovered is therefore read together with BBBC041 specificity and AUC for the same step, and a sensitivity gain on MP-IDB counts as recovery only if AUC on BBBC041 does not fall (open decision 7).
+| Model | *P. falciparum* minus other species (pp, 95% CI) | site_a stage with most misses (share; miss rate) | site_b stage with most misses (share; miss rate) |
+|---|---|---|---|
+| VGG-16 | −22.6 (−31.7 to −13.1) | ring (93%; 4.0%) | ring (71%; 13.0%) |
+| ResNet-50 | −3.8 (−14.9 to 7.7) | trophozoite (55%; 16.5%) | ring (64%; 36.7%) |
+| MobileNetV2 | −10.0 (−21.0 to 0.7) | trophozoite (46%; 11.0%) | ring (52%; 65.1%) |
+
+Sources: `rq3_<model>_s0.csv`. Only VGG-16 shows a species gap larger than its interval, and it runs the opposite way to a species effect: *P. falciparum*, the NIH species, is detected less often. 1,230 of the 1,297 MP-IDB *P. falciparum* parasites are rings. On BBBC041 site_b, rings account for the largest share of misses for all three models (52 to 71%); MobileNetV2 misses 65% of site_b rings and also 80% of site_b trophozoites. On site_a, trophozoites (69% of the parasites) account for the largest share of misses for ResNet-50 and MobileNetV2, while their miss rate stays below that of rings and gametocytes.
+
+For VGG-16 a likely reading is that the model misses the smallest parasite form, the ring, wherever it occurs, and that its MP-IDB species gap comes from the stage mix, not from the species. The other two models do not show this pattern as clearly, so the final analysis tests it directly by comparing ring sensitivity across the two MP-IDB groups, for each model and seed.
+
+### RQ2: background removal and colour matching
+
+| Test set, metric | Model | Raw | Background removed | + Reinhard | + Histogram matching |
+|---|---|---:|---:|---:|---:|
+| MP-IDB *P. falciparum* sensitivity | VGG-16 | 57.4 | 71.9 | 66.4 | 99.5 |
+| | ResNet-50 | 52.6 | 63.9 | 52.3 | 98.1 |
+| | MobileNetV2 | 28.6 | 27.2 | 32.9 | 95.4 |
+| site_a specificity | VGG-16 | 65.5 | 53.6 | 74.9 | 5.9 |
+| | ResNet-50 | 87.3 | 66.6 | 82.0 | 6.6 |
+| | MobileNetV2 | 90.0 | 78.9 | 96.3 | 44.4 |
+| site_a sensitivity | VGG-16 | 99.3 | 99.4 | 80.5 | 99.8 |
+| | ResNet-50 | 79.3 | 92.6 | 42.8 | 98.4 |
+| | MobileNetV2 | 83.7 | 84.3 | 15.9 | 96.6 |
+| site_a AUC | VGG-16 | 97.2 | 96.6 | 85.6 | 91.6 |
+| | ResNet-50 | 92.0 | 90.2 | 74.5 | 72.7 |
+| | MobileNetV2 | 94.5 | 89.6 | 84.1 | 88.5 |
+
+Values in %; every set, metric and share recovered is in `rq2_<model>_s0.csv`. Removing the background raises MP-IDB *P. falciparum* sensitivity for VGG-16 (recovering 36% of its drop) and ResNet-50 (25%), but not for MobileNetV2, and it lowers site_a specificity for all three. Reinhard transfer raises site_a specificity for VGG-16 and MobileNetV2 but costs sensitivity, down to 15.9% for MobileNetV2. Histogram matching pushes almost every cell to *parasitised* for all three models: sensitivity is 80 to 100% on every set, while site_a specificity falls to 5.9 to 44.4%. Compared with the raw crops, no step raises AUC on either BBBC041 site for any model. Leaving out the 1,022 BBBC041 cells whose mask fell back to a neighbouring region changes no BBBC041 value by more than 2.2 points for any model (`rq2_<model>_s0_without_nearest.csv`).
+
+At the fixed threshold, the colour steps mostly move the models' scores instead of improving how well they separate the classes, and this holds for all three architectures. This has a methodological consequence. On MP-IDB, which has no uninfected cells, a higher sensitivity cannot tell a better model from one that calls more cells parasitised: histogram matching "recovers" 85 to 110% of the MP-IDB drops while destroying specificity on BBBC041. For the final analysis, RQ2's share recovered is therefore read together with BBBC041 specificity and AUC for the same step, and a sensitivity gain on MP-IDB counts as recovery only if AUC on BBBC041 does not fall (open decision 7).
+
+| Figure | What it shows |
+|---|---|
+| [`R_vgg16_s0.png`](../outputs/figures/R_vgg16_s0.png) | VGG-16: every test set and metric, raw crops and the three RQ2 variants |
+| [`R_resnet50_s0.png`](../outputs/figures/R_resnet50_s0.png) | the same for ResNet-50 |
+| [`R_mobilenet_v2_s0.png`](../outputs/figures/R_mobilenet_v2_s0.png) | the same for MobileNetV2 |
 
 ## §10. Repository organisation
 
@@ -377,7 +431,9 @@ malaria-cross-dataset/
 │   ├── colour.py                # Stage F: Reinhard, histogram matching, stain channels
 │   ├── data.py                  # Stage E: nih_cells, test_cells, CellDataset
 │   ├── models.py                # Stage E: build_model, check_all_trainable
-│   ├── metrics.py               # Stage H: rates, drop, share recovered, bootstrap
+│   ├── metrics.py               # Stage H: rates, drop, share recovered, paired bootstrap
+│   ├── results.py               # Stage H: reads prediction files back as the reported sets
+│   ├── provenance.py            # code commit, manifest hashes and crop digests of every run
 │   └── plots.py                 # figure helpers
 │
 ├── scripts/
@@ -391,7 +447,8 @@ malaria-cross-dataset/
 │   ├── pack_for_colab.py        # Stage E: data archives for Colab
 │   ├── train.py                 # Stage E: fine-tuning
 │   ├── evaluate.py              # Stage G: frozen inference, per-cell predictions
-│   ├── summarise_results.py     # Stage H: RQ1/RQ2/RQ3 tables and figure
+│   ├── summarise_results.py     # Stage H: RQ1/RQ2/RQ3 tables and figure, per model
+│   ├── compare_models.py        # Stage H: RQ1 paired differences in drop between models
 │   ├── make_mo_figures.py       # figures for this document
 │   ├── make_notebook.py         # generates notebooks/01_eda.ipynb
 │   ├── make_week4_deck.py       # supervision slides
@@ -457,18 +514,20 @@ python scripts/build_colour_crops.py
 ### Training, evaluation and summary (Stages E, G, H)
 
 ```bash
-python scripts/pack_for_colab.py --variants raw masked reinhard histmatch
-# on Colab, through notebooks/10_train_colab.ipynb:
+python scripts/pack_for_colab.py          # code.zip, data_raw.zip, data_rq2.zip
+# on Colab, through notebooks/10_train_colab.ipynb, for each of vgg16, resnet50, mobilenet_v2:
 python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0
+# then once:
+python scripts/compare_models.py          # RQ1: paired differences in drop
 ```
 
 The full run order, including the EDA-only steps, is in [`README.md`](../README.md). Seeds are fixed for the split (42), the colour reference sample (0), the bootstrap (0) and each training run (`--seed`).
 
 ### Reproducibility boundary
 
-The code, the pinned split, the manifests' build logic and every summary table are public in the repository. The images are not: anyone reproducing the work downloads the three datasets from the sources in §1 and places them in the project root. Training needs a GPU (a free Colab T4 is enough for VGG-16, about three minutes per epoch); everything else runs on a CPU. Following Di Cosmo et al. (2026), the repository will be archived with a persistent identifier at the end of the project.
+The code, the pinned split, the manifests' build logic and every summary table are public in the repository. The images are not: anyone reproducing the work downloads the three datasets from the sources in §1 and places them in the project root. Training needs a GPU (a free Colab T4 is enough: about three minutes per epoch for VGG-16, under two for the other two models); everything else runs on a CPU. Following Di Cosmo et al. (2026), the repository will be archived with a persistent identifier at the end of the project.
 
 ## §12. Open decisions for the supervisor
 
@@ -476,11 +535,12 @@ Agreed already: the RQs as worded in the literature review, VGG-16 as the first 
 
 1. fixed hyperparameters (Adam, 10⁻⁴, batch 32, early stopping, patience 3) for all three arms;
 2. one seed for the midterm, three per architecture for the final results;
-3. a paired bootstrap over images for the RQ1 architecture comparison;
-4. share recovered left undefined when the drop is not positive;
+3. the RQ1 architecture comparison as a paired bootstrap over images, with Bonferroni-adjusted intervals across the 24 comparisons (implemented in `compare_models.py`);
+4. share recovered left undefined unless the raw drop's 95% interval lies above zero;
 5. the RQ3 stage table showing miss rate next to the share of misses;
 6. keeping the 340 MP-IDB fallback crops, with a check without them;
-7. reading RQ2's share recovered together with BBBC041 specificity and AUC, because the baseline shows the colour steps shift scores toward *parasitised* (§9).
+7. reading RQ2's share recovered together with BBBC041 specificity and AUC, because the baseline shows the colour steps shift scores toward *parasitised* for all three models (§9);
+8. whether to add a threshold-free view of RQ1 (AUC drop next to the sensitivity and specificity drops), since the architectures differ mainly in where their scores fall relative to the fixed 0.5 threshold (§9).
 
 ## References
 
