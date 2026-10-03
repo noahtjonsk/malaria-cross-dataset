@@ -1,0 +1,59 @@
+{
+ "variants": {
+  "raw": {
+   "commit": "303b156",
+   "manifests": {
+    "bbbc041_cells.csv": "8a71d87184b4",
+    "mpidb_wholecell_cells.csv": "5760b84abdab",
+    "nih_cells.csv": "11b002b7da77",
+    "nih_split.csv": "1f79be27e2ed"
+   },
+   "crops": "cbcf07f86f3c"
+  },
+  "masked": {
+   "commit": "303b156",
+   "manifests": {
+    "masked_otsu-gray_cells.csv": "a90887c7eb94"
+   },
+   "crops": "42178b6d7df2"
+  },
+  "reinhard": {
+   "commit": "303b156",
+   "manifests": {
+    "colour_reinhard_cells.csv": "c3cbec6a9674"
+   },
+   "crops": "6183490ac6d6"
+  },
+  "histmatch": {
+   "commit": "303b156",
+   "manifests": {
+    "colour_histmatch_cells.csv": "144ddfdd25b1"
+   },
+   "crops": "7c6cade3c819"
+  }
+ },
+ "checkpoint": "mobilenet_v2_s0.pt",
+ "settings": {
+  "lr": 0.0001,
+  "batch_size": 32,
+  "max_epochs": 20,
+  "patience": 3,
+  "weight_decay": 0.0,
+  "input": 224,
+  "augment": "hflip, vflip, rot90",
+  "threshold": 0.5,
+  "arch": "mobilenet_v2",
+  "seed": 0,
+  "pretrained": true,
+  "smoke": false,
+  "git_commit": "303b156"
+ },
+ "best_epoch": 6,
+ "val": {
+  "loss": 0.07692774792160356,
+  "sensitivity": 0.9648456057007125,
+  "specificity": 0.9802219006271105,
+  "accuracy": 0.9724748683580661
+ },
+ "smoke_eval": false
+}

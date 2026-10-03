@@ -1,0 +1,58 @@
+{
+ "variants": {
+  "raw": {
+   "commit": "303b156",
+   "manifests": {
+    "bbbc041_cells.csv": "8a71d87184b4",
+    "mpidb_wholecell_cells.csv": "5760b84abdab",
+    "nih_cells.csv": "11b002b7da77",
+    "nih_split.csv": "1f79be27e2ed"
+   },
+   "crops": "cbcf07f86f3c"
+  },
+  "masked": {
+   "commit": "303b156",
+   "manifests": {
+    "masked_otsu-gray_cells.csv": "a90887c7eb94"
+   },
+   "crops": "42178b6d7df2"
+  },
+  "reinhard": {
+   "commit": "303b156",
+   "manifests": {
+    "colour_reinhard_cells.csv": "c3cbec6a9674"
+   },
+   "crops": "6183490ac6d6"
+  },
+  "histmatch": {
+   "commit": "303b156",
+   "manifests": {
+    "colour_histmatch_cells.csv": "144ddfdd25b1"
+   },
+   "crops": "7c6cade3c819"
+  }
+ },
+ "checkpoint": "vgg16_s0.pt",
+ "settings": {
+  "lr": 0.0001,
+  "batch_size": 32,
+  "max_epochs": 20,
+  "patience": 3,
+  "weight_decay": 0.0,
+  "input": 224,
+  "augment": "hflip, vflip, rot90",
+  "threshold": 0.5,
+  "arch": "vgg16",
+  "seed": 0,
+  "pretrained": true,
+  "smoke": false
+ },
+ "best_epoch": 8,
+ "val": {
+  "loss": 0.0779601880855227,
+  "sensitivity": 0.9819477434679335,
+  "specificity": 0.9618909792571153,
+  "accuracy": 0.9719961704164672
+ },
+ "smoke_eval": false
+}
