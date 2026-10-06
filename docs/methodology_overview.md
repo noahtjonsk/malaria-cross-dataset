@@ -44,7 +44,7 @@ flowchart TB
     C["C. Patient-grouped split<br/>NIH 70/15/15 by patient<br/>pinned in nih_split.csv<br/>malaria/splits.py"]
     D["D. EDA<br/>per-cell brightness, colour,<br/>sharpness, size<br/>compute_stats.py, 03_eda_short"]
     F["F. Test inputs<br/>F0 raw crops (RQ1)<br/>F1 background removed (RQ2)<br/>F2 colour matched: Reinhard<br/>or histogram matching (RQ2)<br/>build_masked_crops.py<br/>build_colour_crops.py"]
-    E["E. Fine-tuning on NIH train<br/>E1 VGG-16, E2 ResNet-50,<br/>E3 MobileNetV2 (the baseline)<br/>all layers trained,<br/>early stopping on NIH val<br/>train.py"]
+    E["E. Fine-tuning on NIH train<br/>E1 VGG-16, E2 ResNet-50,<br/>E3 MobileNetV2<br/>(baseline: all three)<br/>all layers trained,<br/>early stopping on NIH val<br/>train.py"]
     G["G. Frozen inference<br/>NIH hold-out, BBBC041 site_a/site_b,<br/>MP-IDB; threshold 0.5<br/>evaluate.py"]
     H["H. Metrics and error analysis<br/>H1 drop (RQ1)<br/>H2 share recovered (RQ2)<br/>H3 species and stage (RQ3)<br/>image-resampled 95% intervals<br/>metrics.py, summarise_results.py,<br/>compare_models.py"]
     A --> B --> C --> D
@@ -157,7 +157,7 @@ Output: `data/manifests/*_cells.csv` (rebuilt deterministically, so gitignored) 
 
 **Script:** [`malaria/splits.py`](../malaria/splits.py); pinned output [`data/manifests/nih_split.csv`](../data/manifests/nih_split.csv)
 
-NIH is split 70/15/15 by patient (`splits.patient_grouped_split`, seed 42). Patients are assigned greedily, largest first, to whichever split is furthest below its target, which keeps the class balance close to 50/50 without splitting any patient. The split was computed once and written to the tracked `nih_split.csv`, so all three architectures train on the same rows.
+NIH is split 70/15/15 by patient (`splits.patient_grouped_split`, seed 42). Patients are assigned greedily, largest first, to whichever split is furthest below its target number of cells, so no patient is split. The assignment does not target class balance, but every split stays close to 50/50 (table below). The split was computed once and written to the tracked `nih_split.csv`, so all three architectures train on the same rows.
 
 ### Split similarity
 
@@ -390,20 +390,32 @@ For VGG-16 a likely reading is that the model misses the smallest parasite form,
 
 | Test set, metric | Model | Raw | Background removed | + Reinhard | + Histogram matching |
 |---|---|---:|---:|---:|---:|
-| MP-IDB *P. falciparum* sensitivity | VGG-16 | 57.4 | 71.9 | 66.4 | 99.5 |
-| | ResNet-50 | 52.6 | 63.9 | 52.3 | 98.1 |
-| | MobileNetV2 | 28.6 | 27.2 | 32.9 | 95.4 |
-| site_a specificity | VGG-16 | 65.5 | 53.6 | 74.9 | 5.9 |
-| | ResNet-50 | 87.3 | 66.6 | 82.0 | 6.6 |
-| | MobileNetV2 | 90.0 | 78.9 | 96.3 | 44.4 |
 | site_a sensitivity | VGG-16 | 99.3 | 99.4 | 80.5 | 99.8 |
-| | ResNet-50 | 79.3 | 92.6 | 42.8 | 98.4 |
-| | MobileNetV2 | 83.7 | 84.3 | 15.9 | 96.6 |
+|  | ResNet-50 | 79.3 | 92.6 | 42.8 | 98.4 |
+|  | MobileNetV2 | 83.7 | 84.3 | 15.9 | 96.6 |
+| site_b sensitivity | VGG-16 | 89.8 | 90.8 | 89.8 | 100.0 |
+|  | ResNet-50 | 68.0 | 73.6 | 75.9 | 95.0 |
+|  | MobileNetV2 | 30.4 | 36.6 | 47.2 | 80.5 |
+| MP-IDB *P. falciparum* sensitivity | VGG-16 | 57.4 | 71.9 | 66.4 | 99.5 |
+|  | ResNet-50 | 52.6 | 63.9 | 52.3 | 98.1 |
+|  | MobileNetV2 | 28.6 | 27.2 | 32.9 | 95.4 |
+| MP-IDB other species sensitivity | VGG-16 | 80.0 | 82.9 | 70.0 | 100.0 |
+|  | ResNet-50 | 56.4 | 67.9 | 42.1 | 99.3 |
+|  | MobileNetV2 | 38.6 | 37.9 | 28.6 | 88.6 |
+| site_a specificity | VGG-16 | 65.5 | 53.6 | 74.9 | 5.9 |
+|  | ResNet-50 | 87.3 | 66.6 | 82.0 | 6.6 |
+|  | MobileNetV2 | 90.0 | 78.9 | 96.3 | 44.4 |
+| site_b specificity | VGG-16 | 95.0 | 86.2 | 80.3 | 1.1 |
+|  | ResNet-50 | 98.1 | 98.3 | 89.8 | 15.0 |
+|  | MobileNetV2 | 99.1 | 97.2 | 98.1 | 41.9 |
 | site_a AUC | VGG-16 | 97.2 | 96.6 | 85.6 | 91.6 |
-| | ResNet-50 | 92.0 | 90.2 | 74.5 | 72.7 |
-| | MobileNetV2 | 94.5 | 89.6 | 84.1 | 88.5 |
+|  | ResNet-50 | 92.0 | 90.2 | 74.5 | 72.7 |
+|  | MobileNetV2 | 94.5 | 89.6 | 84.1 | 88.5 |
+| site_b AUC | VGG-16 | 97.5 | 95.8 | 93.7 | 73.0 |
+|  | ResNet-50 | 96.4 | 96.1 | 91.6 | 72.5 |
+|  | MobileNetV2 | 93.0 | 87.2 | 87.6 | 69.4 |
 
-Values in %; every set, metric and share recovered is in `rq2_<model>_s0.csv`. Removing the background raises MP-IDB *P. falciparum* sensitivity for VGG-16 (recovering 36% of its drop) and ResNet-50 (25%), but not for MobileNetV2, and it lowers site_a specificity for all three. Reinhard transfer raises site_a specificity for VGG-16 and MobileNetV2 but costs sensitivity, down to 15.9% for MobileNetV2. Histogram matching pushes almost every cell to *parasitised* for all three models: sensitivity is 80 to 100% on every set, while site_a specificity falls to 5.9 to 44.4%. Compared with the raw crops, no step raises AUC on either BBBC041 site for any model. Leaving out the 1,022 BBBC041 cells whose mask fell back to a neighbouring region changes no BBBC041 value by more than 2.2 points for any model (`rq2_<model>_s0_without_nearest.csv`).
+Values in %; the table holds every external set and metric, and the shares recovered and intervals are in `rq2_<model>_s0.csv`. Removing the background raises MP-IDB *P. falciparum* sensitivity for VGG-16 (recovering 36% of its drop) and ResNet-50 (25%), but not for MobileNetV2. It also raises site_b sensitivity for all three models (by 1.0 to 6.2 points) and MP-IDB other-species sensitivity for ResNet-50 (56.4 to 67.9), while it lowers site_a specificity for all three and site_b specificity for VGG-16 (95.0 to 86.2). Reinhard transfer raises site_a specificity for VGG-16 and MobileNetV2 but costs site_a sensitivity, down to 15.9% for MobileNetV2; on site_b it raises sensitivity for MobileNetV2 (30.4 to 47.2) and ResNet-50 (68.0 to 75.9). Histogram matching pushes almost every cell to *parasitised* for all three models: sensitivity is 80 to 100% on every set, while specificity falls to 5.9 to 44.4% on site_a and 1.1 to 41.9% on site_b. Compared with the raw crops, no step raises AUC on either BBBC041 site for any model. Leaving out the 1,022 BBBC041 cells whose mask fell back to a neighbouring region changes no BBBC041 value by more than 2.2 points for any model (`rq2_<model>_s0_without_nearest.csv`).
 
 At the fixed threshold, the colour steps mostly move the models' scores instead of improving how well they separate the classes, and this holds for all three architectures. This has a methodological consequence. On MP-IDB, which has no uninfected cells, a higher sensitivity cannot tell a better model from one that calls more cells parasitised: histogram matching "recovers" 85 to 110% of the MP-IDB drops while destroying specificity on BBBC041. For the final analysis, RQ2's share recovered is therefore read together with BBBC041 specificity and AUC for the same step, and a sensitivity gain on MP-IDB counts as recovery only if AUC on BBBC041 does not fall (open decision 7).
 
