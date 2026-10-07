@@ -269,7 +269,7 @@ The values are fixed in advance (`SETTINGS` in `train.py`) and not tuned.
 | Augmentation | horizontal and vertical flips, rotation by multiples of 90° (`data.augment`) |
 | Seeds | one (seed 0) for the midterm baseline; three per architecture planned for the final results |
 
-No grid search or Optuna is used. Tuning each architecture separately would make the RQ1 comparison partly a comparison of tuning budgets, and a free Colab GPU does not allow a search over three large networks. The chosen values are standard for fine-tuning ImageNet models on this dataset, and early stopping on NIH validation guards against the main risk of a fixed schedule, which is training too long. Only the seed varies, so that each final result is a distribution over runs instead of one run.
+No grid search or Optuna is used. Tuning each architecture separately would make the RQ1 comparison partly a comparison of tuning budgets, and a free Colab GPU does not allow a search over three large networks. The values follow Loddo et al. (2022), who fine-tuned the same three architectures on NIH with Adam, a learning rate of 10⁻⁴ and a batch size of 32, and found that smaller rates learned too slowly while larger ones did not converge. Training every layer at such a low rate also follows Rajaraman et al. (2019), so that the pretrained weights change only gradually. Early stopping on NIH validation replaces Loddo et al.'s fixed ten epochs and guards against the main risk of a fixed schedule, which is training too long. Only the seed varies, so that each final result is a distribution over runs instead of one run.
 
 **Class balance and resampling.** NIH training cells are 50.1% parasitised, so the training data are neither undersampled nor oversampled, and the loss is not reweighted. The imbalance that matters is at test time (2.7 to 5.1% on BBBC041). It is handled by reporting sensitivity and specificity separately, since neither depends on prevalence.
 
@@ -311,7 +311,7 @@ What differs between arms is the architecture, and what differs between RQ2 vari
 
 All definitions follow Table 2 of the literature review. The task is binary classification with parasitised as the positive class. *Sensitivity* is the share of parasitised cells called parasitised, and *specificity* the share of uninfected cells called uninfected. Specificity is measured on NIH and BBBC041 only, since MP-IDB has no uninfected cells. AUC is a threshold-free check on NIH and BBBC041. The *drop* is the NIH hold-out value minus the test-set value, in percentage points, per model and test set (`metrics.drop_pp`).
 
-Accuracy, F1 and AUC were considered as the main metric and rejected. At 2.7% prevalence, a model that calls every BBBC041 cell uninfected scores 97.3% accuracy. A high AUC can also sit alongside an unusable operating point: Zhao et al. (2020) report an AUC of 0.945 on BBBC041, while Hou et al. (2026) found 18.0% specificity at their threshold. A missed parasite and a false alarm also have different clinical costs, so they are reported separately.
+Accuracy, F1 and AUC were considered as the main metric and rejected. At 2.7% prevalence, a model that calls every BBBC041 cell uninfected scores 97.3% accuracy. F1 combines sensitivity with precision, and precision falls with prevalence even when the model does not change: Hou et al. (2026) show that a single operating point gives a precision of 15 to 27% below 1% prevalence and 66 to 90% at 5 to 20%. On site_a, VGG-16's precision is 7.4%. A high AUC can also sit alongside an unusable operating point: Zhao et al. (2020) report an AUC of 0.945 on BBBC041, while Hou et al. (2026) found 18.0% specificity at their threshold. A missed parasite and a false alarm also have different clinical costs, so they are reported separately.
 
 ### Uncertainty
 
@@ -384,7 +384,7 @@ Much of the difference between the architectures lies in where their scores fall
 
 Sources: `rq3_<model>_s0.csv`. Only VGG-16 shows a species gap larger than its interval, and it runs the opposite way to a species effect: *P. falciparum*, the NIH species, is detected less often. 1,230 of the 1,297 MP-IDB *P. falciparum* parasites are rings. On BBBC041 site_b, rings account for the largest share of misses for all three models (52 to 71%); MobileNetV2 misses 65% of site_b rings and also 80% of site_b trophozoites. On site_a, trophozoites (69% of the parasites) account for the largest share of misses for ResNet-50 and MobileNetV2, while their miss rate stays below that of rings and gametocytes.
 
-For VGG-16 a likely reading is that the model misses the smallest parasite form, the ring, wherever it occurs, and that its MP-IDB species gap comes from the stage mix, not from the species. The other two models do not show this pattern as clearly, so the final analysis tests it directly by comparing ring sensitivity across the two MP-IDB groups, for each model and seed.
+Rings are missed more often than trophozoites in five of the six model and site combinations; the exception is MobileNetV2 on site_b, which misses 65% of rings and 80% of trophozoites. This fits their size: a ring is a chromatin dot of 1 to 2 µm, a few pixels in a resized cell crop, against 5 to 8 µm for a mature trophozoite (Hou et al., 2026). Since 1,230 of the 1,297 MP-IDB *P. falciparum* parasites are rings, a likely reading of VGG-16's species gap is the stage mix rather than the species. The final analysis tests this directly by comparing ring sensitivity across the two MP-IDB groups, for each model and seed.
 
 ### RQ2: background removal and colour matching
 
@@ -580,6 +580,8 @@ Ljosa, V., Sokolnicki, K. L., & Carpenter, A. E. (2012). Annotated high-throughp
 
 Loddo, A., Di Ruberto, C., Kocher, M., & Prod'Hom, G. (2019). MP-IDB: The Malaria Parasite Image Database for image processing and analysis. In *Processing and Analysis of Biomedical Information* (pp. 57–65). Springer. https://doi.org/10.1007/978-3-030-13835-6_7
 
+Loddo, A., Fadda, C., & Di Ruberto, C. (2022). An empirical evaluation of convolutional networks for malaria diagnosis. *Journal of Imaging, 8*(3), 66. https://doi.org/10.3390/jimaging8030066
+
 Macenko, M., Niethammer, M., Marron, J. S., Borland, D., Woosley, J. T., Guan, X., Schmitt, C., & Thomas, N. E. (2009). A method for normalizing histology slides for quantitative analysis. In *2009 IEEE International Symposium on Biomedical Imaging: From Nano to Macro* (pp. 1107–1110). https://doi.org/10.1109/ISBI.2009.5193250
 
 Otsu, N. (1979). A threshold selection method from gray-level histograms. *IEEE Transactions on Systems, Man, and Cybernetics, 9*(1), 62–66. https://doi.org/10.1109/TSMC.1979.4310076
@@ -587,6 +589,8 @@ Otsu, N. (1979). A threshold selection method from gray-level histograms. *IEEE 
 Qin, X., Zhang, Z., Huang, C., Dehghan, M., Zaiane, O. R., & Jagersand, M. (2020). U2-Net: Going deeper with nested U-structure for salient object detection. *Pattern Recognition, 106*, 107404. https://doi.org/10.1016/j.patcog.2020.107404
 
 Rajaraman, S., Antani, S. K., Poostchi, M., Silamut, K., Hossain, M. A., Maude, R. J., Jaeger, S., & Thoma, G. R. (2018). Pre-trained convolutional neural networks as feature extractors toward improved malaria parasite detection in thin blood smear images. *PeerJ, 6*, e4568. https://doi.org/10.7717/peerj.4568
+
+Rajaraman, S., Jaeger, S., & Antani, S. K. (2019). Performance evaluation of deep neural ensembles toward malaria parasite detection in thin-blood smear images. *PeerJ, 7*, e6977. https://doi.org/10.7717/peerj.6977
 
 Reinhard, E., Ashikhmin, M., Gooch, B., & Shirley, P. (2001). Color transfer between images. *IEEE Computer Graphics and Applications, 21*(4), 34–41. https://doi.org/10.1109/38.946629
 
