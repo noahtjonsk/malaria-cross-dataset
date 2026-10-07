@@ -39,11 +39,8 @@ colab/
 *.docx
 *.pptx
 *.pdf
-!docs/methodology/*.pdf
 !LiteratureReview_NoahTjonSienKie.pdf
 ~$*
-canvasinstructions.md
-feedback proposal.txt
 
 # Python and editor artefacts
 __pycache__/
@@ -54,25 +51,3 @@ __pycache__/
 
 # Per-cell status of the full background-removal run (8 MB), rebuilt by build_masked_crops.py
 outputs/tables/masked_otsu-gray_status.csv
-# Local stand-in logo for test builds; Overleaf has tilburg-logo.pdf
-docs/methodology/tilburg-logo.png
-# LaTeX build artefacts
-docs/methodology/*.aux
-docs/methodology/*.log
-docs/methodology/*.bcf
-docs/methodology/*.run.xml
-docs/methodology/*.bbl
-docs/methodology/*.blg
-docs/methodology/*.out
-docs/methodology/MO_preview_not_final_style.pdf
-docs/methodology/*.zip
-docs/methodology/mo.pdf
-docs/methodology/*.fls
-docs/methodology/*.fdb_latexmk
-docs/methodology/*.toc
-
-# Local tooling config, not part of the project
-CLAUDE.md
-.mcp.json
-.claude/
-.playwright-mcp/

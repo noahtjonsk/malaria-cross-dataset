@@ -9,7 +9,7 @@ MP-IDB (CHUV Lausanne).
 pip install -r requirements.txt               # pinned versions this was last run with
 python scripts/build_crops.py                 # manifests + ~86k cached crops (~15 min, ~2.9 GB)
 python scripts/compute_stats.py --workers 8   # per-image statistics for 115k cells (~5 min)
-# week 4: supervisor feedback (needs NIH-NLM-ThinBloodSmearsPf/ in the project root)
+# NIH source release, recut cells and background methods (needs NIH-NLM-ThinBloodSmearsPf/ in the project root)
 python scripts/check_nih_overlap.py           # how that release relates to cell_images
 python scripts/build_crops.py --nihpoly       # NIH cells recut from the Polygon Set (~3 min)
 python scripts/compute_stats.py --manifest nihpoly_cells.csv
@@ -19,11 +19,8 @@ python scripts/build_masked_crops.py --method otsu-gray --datasets bbbc041 mpidb
 python scripts/compute_stats.py --manifest masked_otsu-gray_sample_cells.csv
 python scripts/compute_colour_stats.py --masked otsu-gray_sample
 python -m papermill notebooks/01_eda.ipynb outputs/01_eda_run.ipynb --cwd notebooks
-python scripts/make_week4_deck.py             # Week 4 supervision deck from the saved figures
 # short EDA: findings and the decisions they lead to (about a minute)
 python scripts/compute_stats.py --manifest mpidb_wholecell_cells.csv
-python -m nbconvert --to notebook --execute --inplace notebooks/02_eda_core.ipynb
-python -m nbconvert --to html --no-input notebooks/02_eda_core.ipynb --output-dir outputs
 python -m nbconvert --to notebook --execute --inplace notebooks/03_eda_short.ipynb
 python -m nbconvert --to html --no-input notebooks/03_eda_short.ipynb --output-dir outputs
 # RQ2 test inputs, every cell (Otsu ~15 min, colour ~20 min)
@@ -38,13 +35,11 @@ python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0                 # rq1/rq2/rq3 tables + R_ figure
 python scripts/compare_models.py                                     # RQ1: paired differences in drop
-# D3 Methodology Overview (TinyTeX: pdflatex + biber, classicthesis like the lit review)
+# figures for the Methodology Overview (docs/methodology/figures/)
 python scripts/make_mo_figures.py
-cd docs/methodology && pdflatex mo && biber mo && pdflatex mo && pdflatex mo
 ```
 
-The Methodology Overview (D3) is [`docs/methodology_overview.md`](docs/methodology_overview.md);
-the LaTeX/PDF files in `docs/methodology/` are its earlier versions.
+The Methodology Overview (D3) is [`docs/methodology_overview.md`](docs/methodology_overview.md).
 The ELSA checklist (D5, deon plus project items and mitigations) is `docs/elsa_checklist.md`.
 
 ## Where to look at the cells
@@ -84,22 +79,14 @@ source images.
 Training runs on a Colab T4 through `notebooks/10_train_colab.ipynb`, which resumes
 from the per-epoch checkpoint on Drive after a disconnect.
 
-There are three EDA notebooks:
+There are two EDA notebooks:
 
 - `notebooks/03_eda_short.ipynb` is the one to read first: a ten-minute version
   (about 1,600 words) that puts the findings → decisions summary first, with six short
   evidence sections after it.
-- `notebooks/02_eda_core.ipynb` is the longer core version (nine sections), which also
-  checks the RQ2 background and colour matching.
 - `notebooks/01_eda.ipynb` is the full record and appendix, generated as described below.
 
-`notebooks/04_methodology_explained.ipynb` (HTML: `outputs/04_methodology_explained.html`) walks through
-the D3 Methodology Overview and the VGG-16 baseline results in plain language. It reads
-the saved `rq*_vgg16_s0.csv` tables; rebuild with
-`python -m nbconvert --to notebook --execute --inplace notebooks/04_methodology_explained.ipynb`
-and `python -m nbconvert --to html --no-input notebooks/04_methodology_explained.ipynb --output-dir outputs`.
-
-02 and 03 measure MP-IDB on the whole-cell crops that every RQ evaluates. They are edited
+03 measures MP-IDB on the whole-cell crops that every RQ evaluates. It is edited
 directly in Jupyter.
 
 `build_crops.py` skips crops that already exist, so re-running is cheap. Pass
@@ -172,15 +159,12 @@ test time, first in crop format (background removed) and then in stain colour
 every RQ, so MP-IDB is evaluated on `mpidb_wholecell` and RQ2's crop-format step
 only removes the background. The trained models stay fixed:
 there is no colour-augmentation arm and no retraining on NIH cells with their
-background. `scripts/make_d2_docs.py` builds the D2 literature review documents
-around this RQ2.
+background.
 
-## Week 4: supervisor feedback on the EDA
+## Data checks behind the method choices
 
-Dr. Ong asked for background removal on the test crops, NIH cells cropped from the
-expert polygons in NIH-NLM-ThinBloodSmearsPf, a look at the cells in other colour
-spaces, and whether that release is the same dataset as cell_images. Notebook
-sections O, P and Q.
+Notebook sections O, P and Q cover the NIH source release, background removal on
+the test crops, and the cells in other colour spaces.
 
 **NIH-NLM-ThinBloodSmearsPf is the source of cell_images, not a new dataset**
 (Kassim et al., 2020). 192 of the 200 cell_images patients and 960 of its 965
@@ -260,10 +244,3 @@ while BBBC041 flips its sign entirely.
 Effect sizes are reported both as Cohen's d and as a rank-based separation, and
 the second is the one to trust here: several features are skewed enough that d is
 unreliable on them.
-
-## Canvas EDA questions
-
-Section N of the notebook answers the fifteen questions from the Canvas EDA
-activity one by one, each with a pointer to the section that supports it, and
-closes with an overall suitability rating. That section is the discussion
-document for the Week 3 supervision meeting.

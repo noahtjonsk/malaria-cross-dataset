@@ -17,7 +17,6 @@ This Methodology Overview (MO) describes how the project is carried out: where t
 - the exploratory data analysis, [`notebooks/03_eda_short.ipynb`](../notebooks/03_eda_short.ipynb) (code-free copy [`outputs/03_eda_short.html`](../outputs/03_eda_short.html)); the full record is [`notebooks/01_eda.ipynb`](../notebooks/01_eda.ipynb)
 - the ELSA checklist (D5), [`docs/elsa_checklist.md`](elsa_checklist.md)
 - the preliminary results in §9 of this document, from `outputs/tables/rq{1,2,3}_<model>_s0.csv` for the three models and the model comparison [`rq1_compare_s0.csv`](../outputs/tables/rq1_compare_s0.csv)
-- earlier versions of this MO: the formative PDF [`MethodologyOverview_NoahTjonSienKie.pdf`](methodology/MethodologyOverview_NoahTjonSienKie.pdf) and the corrected [`MethodologyOverview_NoahTjonSienKie_v2.pdf`](methodology/MethodologyOverview_NoahTjonSienKie_v2.pdf)
 
 In short, three ImageNet-pretrained convolutional networks (VGG-16, ResNet-50 and MobileNetV2) are fine-tuned on NIH single-cell images of *P. falciparum* from Chittagong (Rajaraman et al., 2018). They are then applied, without fine-tuning, to two external test sets: BBBC041, *P. vivax* from two acquisition batches (Ljosa et al., 2012; Hung & Carpenter, 2017), and MP-IDB, four species from Lausanne (Loddo et al., 2019). RQ1 measures how much sensitivity and specificity each model loses. RQ2 changes only the test cells, first removing the background and then matching stain colour to NIH, and measures how much of the loss each step recovers. RQ3 breaks the misses down by species and life stage. The trained models never change after RQ1, so any change in RQ2 can be attributed to the step that caused it.
 
@@ -462,15 +461,11 @@ malaria-cross-dataset/
 │   ├── summarise_results.py     # Stage H: RQ1/RQ2/RQ3 tables and figure, per model
 │   ├── compare_models.py        # Stage H: RQ1 paired differences in drop between models
 │   ├── make_mo_figures.py       # figures for this document
-│   ├── make_notebook.py         # generates notebooks/01_eda.ipynb
-│   ├── make_week4_deck.py       # supervision slides
-│   └── make_d2_docs.py          # literature review working documents
+│   └── make_notebook.py         # generates notebooks/01_eda.ipynb
 │
 ├── notebooks/
 │   ├── 01_eda.ipynb             # full EDA record (generated)
-│   ├── 02_eda_core.ipynb        # core EDA
 │   ├── 03_eda_short.ipynb       # short EDA, the version presented
-│   ├── 04_methodology_explained.ipynb
 │   └── 10_train_colab.ipynb     # Stages E and G on a Colab GPU
 │
 ├── data/
@@ -491,7 +486,7 @@ malaria-cross-dataset/
     ├── methodology_overview.md  # this document (D3)
     ├── figures/pipeline.png     # Figure 1
     ├── elsa_checklist.md        # D5 checklist and mitigations
-    └── methodology/             # earlier LaTeX/PDF versions of the MO and their figures
+    └── methodology/figures/     # figures used in this document
 ```
 
 The four source datasets (`cell_images_NIH/`, `malaria_BBBC041/`, `MP-IDB-…/`, `NIH-NLM-ThinBloodSmearsPf/`) sit in the project root and are gitignored. Images and crops are never committed, because of their size and because BBBC041's licence requires derived data to be shared under the same terms.
