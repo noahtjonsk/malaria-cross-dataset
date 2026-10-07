@@ -534,8 +534,7 @@ quantisation smooths exactly the fine gradients a Laplacian measures, so part of
 that floor may be compression rather than optics.
 
 So the whole-crop figure measures the segmentation mask, not the optics. The
-`_center` column is the one that answers the supervisor's question about blur
-differences between datasets.
+`_center` column is the one to use for blur differences between datasets.
 """)
 
 code("""
@@ -1123,11 +1122,10 @@ MobileNetV2, ResNet-50 and VGG-16 can be fine-tuned on identical rows.
 
 
 md("""
-## N. Answers to the Canvas EDA questions
+## N. The data-quality questions, answered briefly
 
-The Canvas EDA activity asks for readiness to discuss a fixed list of questions at
-the Week 3 supervision meeting. Each is answered here in a sentence or two, with
-the section that supports it.
+Each question is answered here in a sentence or two, with the section that
+supports it.
 
 **Anomalies or unusual patterns.** The largest NIH-vs-test difference is crop
 format, not imaging: a quarter of every NIH crop is black padding, which inflates
@@ -1216,13 +1214,12 @@ JPEG-compressed where site_a is PNG (D, F); Falciparum crops are 78 px against
 """)
 
 
-# ================================================================ week 4
+# ================================================================ NIH source, background, colour
 # ---------------------------------------------------------------- O NIH photos
 md("""
-## O. Week 4: the NIH photographs behind cell_images
+## O. The NIH photographs behind cell_images
 
-After the Week 3 meeting the supervisor pointed to NIH-NLM-ThinBloodSmearsPf
-(Kassim et al., 2020): the full 5312x2988 Chittagong photographs, with an expert
+NIH-NLM-ThinBloodSmearsPf (Kassim et al., 2020) holds the full 5312x2988 Chittagong photographs, with an expert
 outline (Polygon Set, 165 photographs) or centre point (Point Set, 800) for every
 cell. Two questions: is it the same dataset as cell_images, and what do the NIH
 cells look like when they are cut from those outlines?
@@ -1333,8 +1330,7 @@ md("""
 
 Section G found crop format to be the largest train/test difference: every NIH
 cell sits on black, while every test crop keeps its plasma and neighbouring
-cells. The supervisor asked for background-removal algorithms to be tried on the
-test crops.
+cells. This section tries background-removal algorithms on the test crops.
 
 `malaria/background.py` offers two families. rembg's general-purpose models
 (U^2-Net, IS-Net, BiRefNet) were trained on everyday photographs, not blood
@@ -1531,8 +1527,7 @@ pixels are added back.
 md("""
 ## Q. The cells in other colour spaces
 
-The supervisor suggested converting RGB to other colour spaces to see what the
-cells look like there. RGB mixes three things the comparison needs apart: which
+Converting RGB to other colour spaces shows what the cells look like there. RGB mixes three things the comparison needs apart: which
 colour a pixel is, how strong that colour is, and how bright it is.
 `malaria/colour.py` measures every cell in:
 
