@@ -3,13 +3,9 @@
 This is the living ELSA checklist for D5 (the ELSA worksheet). **Part A** takes the
 [deon](https://deon.drivendata.org) base checklist, generated with
 `python -m deon -o checklist.md` (deon 0.3.0), and adds project-specific items marked
-**+**. **Part B** gives a mitigation for each item marked (Part B). These
-mitigations also appear in the Methodology Overview (`docs/methodology/mo.tex`,
-section "Ethical and legal aspects").
-
-> Draft status (29 Sept 2026): the added items and the mitigations were drafted with AI
-> assistance and still need rewriting in my own words. Facts in them (licences, counts,
-> code references) were checked against the dataset pages and the repository.
+**+**. **Part B** gives a mitigation for each item marked (Part B). The final,
+commented version of this checklist, with mitigations and the panel-review
+reflections, is [`docs/elsa_report.md`](elsa_report.md).
 
 ## Part A: checklist
 
