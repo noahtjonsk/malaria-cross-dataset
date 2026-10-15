@@ -40,6 +40,7 @@ colab/
 *.pptx
 *.pdf
 !LiteratureReview_NoahTjonSienKie.pdf
+!docs/methodology_overview_v3.pdf
 ~$*
 
 # Python and editor artefacts

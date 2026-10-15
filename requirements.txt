@@ -30,9 +30,11 @@ onnxruntime==1.26.0
 torch==2.14.0
 torchvision==0.29.0
 
-# Writing the D2 literature review documents
+# Writing the D2 literature review documents; the MO PDF (scripts/build_mo_pdf.py,
+# which also needs Microsoft Edge for the print step)
 python-docx==1.2.0
 pypdf==6.12.2
+markdown==3.8
 
 nbformat==5.10.4
 papermill==2.7.0
