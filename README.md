@@ -3,6 +3,10 @@
 Capstone project. Train on NIH (Bangladesh), test on BBBC041 (Broad) and
 MP-IDB (CHUV Lausanne).
 
+The trained models are research prototypes for studying why malaria classifiers lose
+performance across datasets. They have no clinical validation and must not be used to
+diagnose or screen patients.
+
 ## Run order
 
 ```bash
@@ -33,14 +37,19 @@ python scripts/pack_for_colab.py                                     # -> colab/
 # on Colab (notebooks/10_train_colab.ipynb), for each of vgg16, resnet50, mobilenet_v2:
 python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
-python scripts/summarise_results.py --model vgg16_s0                 # rq1/rq2/rq3 tables + R_ figure
+python scripts/summarise_results.py --model vgg16_s0                 # rq1/F1/rq2/rq3 tables + R_ figure
 python scripts/compare_models.py                                     # RQ1: paired differences in drop
-# figures for the Methodology Overview (docs/methodology/figures/)
+# figures for the Methodology Overview (docs/methodology/figures/) and its PDF (needs Microsoft Edge)
 python scripts/make_mo_figures.py
+python scripts/build_mo_pdf.py docs/methodology_overview_v3.md
 ```
 
-The Methodology Overview (D3) is [`docs/methodology_overview.md`](docs/methodology_overview.md).
-The ELSA checklist (D5, deon plus project items and mitigations) is `docs/elsa_checklist.md`.
+The Methodology Overview (D3) is [`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md)
+(PDF: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf)); the earlier
+Markdown version is [`docs/methodology_overview.md`](docs/methodology_overview.md).
+The ELSA report (D5: the final commented checklist, mitigations and panel-review reflections) is
+[`docs/elsa_report.md`](docs/elsa_report.md); the earlier working checklist is
+[`docs/elsa_checklist.md`](docs/elsa_checklist.md).
 
 ## Where to look at the cells
 
