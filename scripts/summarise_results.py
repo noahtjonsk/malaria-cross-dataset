@@ -19,12 +19,17 @@ Test sets reported (lit review, Table 2)
 
 Writes outputs/tables/ (every table starts with model, arch and seed columns)
     rq1_<model>.csv    value, interval, drop and drop interval per set and metric
+    rq1_f1_<model>.csv precision and F1 with intervals (NIH hold-out, BBBC041), a
+                       secondary measure without a drop: precision changes with prevalence
     rq2_<model>.csv    the same per RQ2 variant, plus the share of the drop recovered
     rq2_<model>_without_nearest.csv
                        RQ2 again without the BBBC041 cells whose mask fell back to
                        the nearest component (robustness check)
     rq3_<model>.csv    sensitivity by MP-IDB species group and by BBBC041 life stage,
                        with each stage's share of all missed parasites
+    rq3_<model>_without_fallback.csv
+                       RQ3 again without the MP-IDB crops whose host cell was not
+                       found (robustness check)
 and outputs/figures/R_<model>.png
 """
 import argparse
@@ -42,11 +47,13 @@ import pandas as pd  # noqa: E402
 
 from malaria import paths, plots  # noqa: E402
 from malaria.data import VARIANTS  # noqa: E402
-from malaria.metrics import (THRESHOLD, bootstrap, interval,  # noqa: E402
-                             reference_draws, share_recovered, summarise)
+from malaria.metrics import (REFERENCE_CLUSTER, THRESHOLD, bootstrap,  # noqa: E402
+                             interval, precision_f1, reference_draws,
+                             share_recovered, summarise)
 from malaria.results import SET_COLOURS, load  # noqa: E402
 
 MASK_STATUS = paths.TABLES / "masked_otsu-gray_status.csv"
+FRAMING = paths.TABLES / "mpidb_wholecell_framing.csv"
 
 
 def rq3_table(raw: dict) -> pd.DataFrame:
@@ -80,6 +87,38 @@ def rq3_table(raw: dict) -> pd.DataFrame:
                      "missed": m, "miss_rate": m / len(g),
                      "share_of_site_misses": m / max(int(site_misses[site]), 1)})
     return pd.DataFrame(rows)
+
+
+def f1_table(raw: dict) -> pd.DataFrame:
+    """Precision and F1 (secondary measures) on the sets with both classes,
+    resampled exactly as in the RQ1 table (same set names and clusters)."""
+    rows = []
+    for name in ("nih_test", "bbbc041/site_a", "bbbc041/site_b"):
+        cluster = REFERENCE_CLUSTER if name == "nih_test" else "source_image"
+        for metric, (pt, draws) in precision_f1(raw[name], name, cluster).items():
+            lo, hi = interval(draws)
+            rows.append({"test_set": name, "metric": metric, "n_cells": len(raw[name]),
+                         "prevalence": raw[name]["label_binary"].mean(),
+                         "value": pt, "ci_low": lo, "ci_high": hi})
+    return pd.DataFrame(rows)
+
+
+def without_fallback(sets: dict) -> dict:
+    """Drop the MP-IDB crops whose host cell was not found: a cell-sized square
+    around the parasite was cut instead (background.host_cell_box).
+
+    Every MP-IDB cell must be listed in the framing table, so cell IDs that do
+    not match (which would silently remove nothing) stop the run; a subset of
+    the cells, as in a --smoke run, is fine."""
+    fr = pd.read_csv(FRAMING, usecols=["cell_id", "framing"])
+    fallback = set(fr.loc[fr["framing"] != "host_cell", "cell_id"])
+    mpidb = pd.concat([s["cell_id"] for k, s in sets.items() if k.startswith("mpidb")])
+    unknown = ~mpidb.isin(fr["cell_id"])
+    if unknown.any():
+        raise SystemExit(f"{unknown.sum()} MP-IDB cells are not in {FRAMING.name}, "
+                         f"e.g. {mpidb[unknown].iloc[0]}")
+    return {k: s[~s["cell_id"].isin(fallback)] if k.startswith("mpidb") else s
+            for k, s in sets.items()}
 
 
 def without_nearest(sets: dict) -> dict:
@@ -205,11 +244,15 @@ def main() -> None:
     if "masked" in variants and not MASK_STATUS.exists():
         raise SystemExit(f"{MASK_STATUS} is needed for the robustness check "
                          "(it is packed into code.zip by pack_for_colab.py)")
+    if not FRAMING.exists():
+        raise SystemExit(f"{FRAMING} is needed for the RQ3 robustness check "
+                         "(it is packed into code.zip by pack_for_colab.py)")
     paths.TABLES.mkdir(parents=True, exist_ok=True)
 
     ref = reference_draws(raw["nih_test"])
     rq1 = summarise(raw, ref=ref)
     save(rq1, f"rq1_{args.model}.csv")
+    save(f1_table(raw), f"rq1_f1_{args.model}.csv")
     print(rq1.round(3).to_string(index=False))
 
     rq2 = None
@@ -221,6 +264,7 @@ def main() -> None:
             save(rob, f"rq2_{args.model}_without_nearest.csv")
 
     save(rq3_table(raw), f"rq3_{args.model}.csv")
+    save(rq3_table(without_fallback(raw)), f"rq3_{args.model}_without_fallback.csv")
     figure(args.model, rq1, rq2)
 
 

@@ -40,7 +40,8 @@ OUT = paths.COLAB
 CODE = ["malaria/*.py", "scripts/*.py", "notebooks/10_train_colab.ipynb",
         "requirements.txt", "data/manifests/nih_split.csv",
         "data/manifests/mpidb_stage_audit.csv",
-        "outputs/tables/masked_otsu-gray_status.csv"]   # RQ2 robustness check
+        "outputs/tables/masked_otsu-gray_status.csv",   # RQ2 robustness check
+        "outputs/tables/mpidb_wholecell_framing.csv"]   # RQ3 robustness check
 
 
 ZIP_NAMES = {"raw": "data_raw.zip", "rq2": "data_rq2.zip"}

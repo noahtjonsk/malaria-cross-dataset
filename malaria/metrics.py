@@ -10,6 +10,8 @@ Task: binary classification of single-cell images, parasitised = positive class.
 - AUC: threshold-free check, on the NIH hold-out set and on BBBC041.
 - Drop: value on the NIH hold-out set minus value on a test set, in
   percentage points.
+- Precision and F1 (secondary): reported with intervals on sets with both
+  classes, without a drop, because precision changes with prevalence.
 - Share recovered (RQ2): (value after matching - value before) / drop.
   Undefined (NaN) unless the drop is clearly above zero, i.e. the lower end of
   its 95% interval is positive: with no measurable drop there is nothing to
@@ -30,7 +32,7 @@ import zlib
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import f1_score, precision_score, roc_auc_score
 
 THRESHOLD = 0.5
 N_BOOT = 2000
@@ -83,15 +85,8 @@ def _weighted_auc(y, p, ci, n_clusters: int, weights: np.ndarray) -> np.ndarray:
         return ((w @ A) * w).sum(1) / ((w @ n_pos) * (w @ n_neg))
 
 
-def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
-              n_boot: int = N_BOOT) -> dict:
-    """Point estimate and cluster-resampled draws of every metric for one set.
-
-    Returns {"sensitivity" | "specificity" | "auc": (point, draws)}. A metric the
-    set cannot define (specificity and AUC on parasitised-only cells) is NaN.
-    Sensitivity and specificity come from per-cluster counts, so a resample of
-    1,200 BBBC041 photographs is one weighted sum, not a pass over 80,000 cells.
-    """
+def _cluster_counts(pred: pd.DataFrame, name: str, cluster: str, n_boot: int) -> tuple:
+    """Per-cluster confusion counts (tp, fn, tn, fp) and the set's resample weights."""
     clusters = pred[cluster].astype(str).to_numpy()
     ids, w = resample_weights(clusters, name, n_boot)
     ci = np.searchsorted(ids, clusters)
@@ -101,6 +96,19 @@ def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
     counts = np.stack([np.bincount(ci, weights=((y == a) & (yhat == b)).astype(float),
                                    minlength=len(ids))
                        for a, b in ((1, 1), (1, 0), (0, 0), (0, 1))], axis=1)  # tp fn tn fp
+    return ids, w, ci, y, p, counts
+
+
+def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
+              n_boot: int = N_BOOT) -> dict:
+    """Point estimate and cluster-resampled draws of every metric for one set.
+
+    Returns {"sensitivity" | "specificity" | "auc": (point, draws)}. A metric the
+    set cannot define (specificity and AUC on parasitised-only cells) is NaN.
+    Sensitivity and specificity come from per-cluster counts, so a resample of
+    1,200 BBBC041 photographs is one weighted sum, not a pass over 80,000 cells.
+    """
+    ids, w, ci, y, p, counts = _cluster_counts(pred, name, cluster, n_boot)
     point = _rates(*counts.sum(0))
     draws = _rates(*(w @ counts).T)
     out = {k: (float(point[k]), draws[k]) for k in point}
@@ -110,6 +118,27 @@ def bootstrap(pred: pd.DataFrame, name: str, cluster: str = "source_image",
         auc = _weighted_auc(y, p, ci, len(ids), np.vstack([np.ones(len(ids)), w]))
         out["auc"] = (float(auc[0]), auc[1:])
     return out
+
+
+def precision_f1(pred: pd.DataFrame, name: str, cluster: str = "source_image",
+                 n_boot: int = N_BOOT) -> dict:
+    """Precision and F1 for one set, on the same resamples as bootstrap().
+
+    Secondary measures, not part of the RQ1 comparison: precision depends on
+    prevalence (NIH ~50%, BBBC041 2.7-5.1%), so no drop is computed. Undefined
+    (NaN) on a set with one class: on MP-IDB precision is 1 by construction and
+    F1 would only repeat sensitivity.
+    """
+    _, w, _, y, _, counts = _cluster_counts(pred, name, cluster, n_boot)
+    if len(np.unique(y)) < 2:
+        return {k: (float("nan"), np.full(n_boot, np.nan)) for k in ("precision", "f1")}
+
+    def rates(tp, fn, tn, fp):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return {"precision": np.divide(tp, tp + fp),
+                    "f1": np.divide(2 * tp, 2 * tp + fp + fn)}
+    point, draws = rates(*counts.sum(0)), rates(*(w @ counts).T)
+    return {k: (float(point[k]), draws[k]) for k in point}
 
 
 def reference_draws(pred: pd.DataFrame, name: str = "nih_test") -> dict:
@@ -223,6 +252,19 @@ def self_test() -> None:
     assert np.isnan(share_recovered(0.9, 0.95, 0.97))
     assert np.isnan(share_recovered(0.9, 0.6, 0.75, drop_ci_low=-0.5))
     assert share_recovered(0.9, 0.6, 0.75, drop_ci_low=20.0) == 0.5
+    # Precision and F1 (secondary): 1 for a perfect predictor, equal to
+    # scikit-learn's, undefined on a set with one class (MP-IDB), paired draws.
+    pf = precision_f1(fake(500), "perfect")
+    assert pf["precision"][0] == 1 and pf["f1"][0] == 1, pf
+    yhat = (d["prob"] >= THRESHOLD).astype(int)
+    pf = precision_f1(d, "check")
+    assert abs(pf["f1"][0] - f1_score(d["label_binary"], yhat)) < 1e-12
+    assert abs(pf["precision"][0] - precision_score(d["label_binary"], yhat)) < 1e-12
+    assert np.array_equal(pf["f1"][1], precision_f1(d.copy(), "check")["f1"][1], equal_nan=True)
+    pos_only = precision_f1(d[d["label_binary"] == 1], "pos")
+    assert all(np.isnan(v[0]) and np.isnan(v[1]).all() for v in pos_only.values())
+    none_called = d.assign(prob=0.0)            # no predicted positives: 0/0
+    assert np.isnan(precision_f1(none_called, "none")["precision"][0])
     print("metrics self-test passed")
 
 
