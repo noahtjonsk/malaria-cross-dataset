@@ -440,7 +440,7 @@ All scripts live in the repository and are listed by the pipeline stage they imp
 | F | `scripts/build_masked_crops.py`, `build_colour_crops.py` (`malaria/colour.py`) | background removal; Reinhard and histogram matching |
 | G | `scripts/evaluate.py` | frozen inference, one prediction file per variant and set, with a `run.json` record |
 | H | `scripts/summarise_results.py`, `compare_models.py` (`malaria/metrics.py`, `results.py`) | RQ1, F1, RQ2 and RQ3 tables per model; paired differences in drop between models |
-| all | `scripts/make_mo_figures.py`, `build_mo_pdf.py` | the figures and the PDF of this document |
+| all | `scripts/make_mo_figures.py`, `build_mo_latex.py`, `build_mo_pdf.py` | the figures; this document as LaTeX and PDF; the ELSA report as PDF |
 
 *Table 13. Scripts by pipeline stage. The repository layout is in Appendix D.*
 
@@ -618,7 +618,8 @@ malaria-cross-dataset/
 │   ├── summarise_results.py     # Stage H: RQ1/F1/RQ2/RQ3 tables and figure, per model
 │   ├── compare_models.py        # Stage H: RQ1 paired differences in drop between models
 │   ├── make_mo_figures.py       # figures for this document
-│   ├── build_mo_pdf.py          # the PDF of this document
+│   ├── build_mo_latex.py        # this document as LaTeX and PDF
+│   ├── build_mo_pdf.py          # the ELSA report as PDF
 │   └── make_notebook.py         # generates notebooks/01_eda.ipynb
 │
 ├── notebooks/
@@ -645,7 +646,7 @@ malaria-cross-dataset/
     ├── methodology_overview.md  # the earlier Markdown version
     ├── elsa_report.md           # D5: final checklist, mitigations, panel reflections
     ├── elsa_checklist.md        # the earlier working checklist
-    └── methodology/figures/     # figures used in this document
+    └── methodology/             # LaTeX source (mo_v3.tex, refs.bib) and figures of this document
 ```
 
 The four source datasets (`cell_images_NIH/`, `malaria_BBBC041/`, `MP-IDB-…/`, `NIH-NLM-ThinBloodSmearsPf/`) sit in the project root and are gitignored. Images and crops are never committed, because of their size and because BBBC041's licence requires derived data to be shared under the same terms.

@@ -39,13 +39,16 @@ python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0                 # rq1/F1/rq2/rq3 tables + R_ figure
 python scripts/compare_models.py                                     # RQ1: paired differences in drop
-# figures for the Methodology Overview (docs/methodology/figures/) and its PDF (needs Microsoft Edge)
+# figures for the Methodology Overview (docs/methodology/figures/), the MO as LaTeX/PDF
+# (TinyTeX: pdflatex + biber) and the ELSA report as PDF (needs Microsoft Edge)
 python scripts/make_mo_figures.py
-python scripts/build_mo_pdf.py docs/methodology_overview_v3.md
+python scripts/build_mo_latex.py
+python scripts/build_mo_pdf.py docs/elsa_report.md
 ```
 
 The Methodology Overview (D3) is [`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md)
-(PDF: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf)); the earlier
+(PDF in the literature review's LaTeX layout: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf),
+built from [`docs/methodology/mo_v3.tex`](docs/methodology/mo_v3.tex)); the earlier
 Markdown version is [`docs/methodology_overview.md`](docs/methodology_overview.md).
 The ELSA report (D5: the final commented checklist, mitigations and panel-review reflections) is
 [`docs/elsa_report.md`](docs/elsa_report.md); the earlier working checklist is
