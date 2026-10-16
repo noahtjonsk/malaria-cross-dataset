@@ -20,7 +20,7 @@ This Methodology Overview (MO) documents how the project is implemented and why 
 
 ### 1.1 Motivation, gap and research questions
 
-CNNs that classify single red-cell images as parasitised or uninfected reach near-perfect scores on the NIH dataset, but lose much of that performance on images from other laboratories. The literature review found that no study varies crop format or stain colour on its own while holding the model fixed, so the cause of the cross-dataset drop is still open. Each research question below is a supervised-learning measurement that addresses part of this gap: RQ1 is a model comparison under one shared shift, RQ2 is an ablation on the test inputs, and RQ3 is an error analysis by subgroup.
+CNNs that classify single red-cell images as parasitised or uninfected score close to perfect on the NIH dataset and much lower on images from other laboratories. The literature review found no study that changes crop format or stain colour on its own while keeping the model fixed, so it is still unclear what causes the cross-dataset drop. The three research questions each measure one part of this: RQ1 compares models under the same shift, RQ2 edits the test inputs one step at a time, and RQ3 breaks the errors down by subgroup.
 
 Three ImageNet-pretrained CNNs (VGG-16, ResNet-50 and MobileNetV2) are fine-tuned on NIH single-cell images of *P. falciparum* from Chittagong (Rajaraman et al., 2018). They are then applied, without fine-tuning, to two external test sets: BBBC041, *P. vivax* from two acquisition batches (Ljosa et al., 2012; Hung & Carpenter, 2017), and MP-IDB, four species from Lausanne (Loddo et al., 2019). The trained models never change after RQ1, so any change in RQ2 can be attributed to the step that caused it.
 
@@ -32,7 +32,7 @@ Three ImageNet-pretrained CNNs (VGG-16, ResNet-50 and MobileNetV2) are fine-tune
 
 **RQ3.** Does sensitivity on the pooled different-species MP-IDB cells (*n* = 140) differ from *P. falciparum* (*n* = 1,297) by more than the resampling interval, and which BBBC041 life stages account for the largest share of missed parasites?
 
-RQ1 is answered in stages E and G, RQ2 in stages F and G, and RQ3 in stage H. Sections 2 and 3 describe the data and how it is prepared (stages A to C), Section 4 the EDA (stage D), Section 5 the models, the RQ2 test inputs and the evaluation (stages E to H), and Section 6 how to reproduce everything.
+RQ1 is answered in stages E and G, RQ2 in stages F and G, and RQ3 in stage H. Sections 2 and 3 describe the data and how they are prepared (stages A to C), Section 4 the EDA (stage D), Section 5 the models, the RQ2 test inputs and the evaluation (stages E to H), and Section 6 how to reproduce everything.
 
 ### 1.2 Pipeline overview
 
@@ -71,7 +71,7 @@ The table gives the cell counts at the level the results are reported: by split,
 
 *Table 1. Cells used in the primary metric, read from [`data/manifests/`](../data/manifests/) through `malaria.data.nih_cells` and `test_cells` ([`malaria/data.py`](../malaria/data.py)). BBBC041 also has 446 `difficult` cells and 103 leukocytes, which are excluded (§3.1).*
 
-Qualitatively, the four sources look different before any model sees them (Figure 2). NIH cells are segmented and placed on a black background, pink and evenly lit. BBBC041 crops are rectangles cut from the smear: site_a cells are sharp, saturated and often blue-purple, site_b cells are grey and slightly blurred, and both show parts of neighbouring cells. MP-IDB crops are yellow to pink with a visible host cell, and most *P. falciparum* parasites are small rings.
+The four sources already look different by eye (Figure 2). NIH cells are segmented and placed on a black background, pink and evenly lit. BBBC041 crops are rectangles cut from the smear: site_a cells are sharp, saturated and often blue-purple, site_b cells are grey and slightly blurred, and both show parts of neighbouring cells. MP-IDB crops are yellow to pink with a visible host cell, and most *P. falciparum* parasites are small rings.
 
 ![Random cells from every test set](methodology/figures/short_1_example_cells.png)
 
@@ -83,28 +83,28 @@ Qualitatively, the four sources look different before any model sees them (Figur
 
 **Licences.** BBBC041 is released under CC BY-NC-SA 3.0, which allows non-commercial use and requires derived data to be shared under the same terms. NIH-NLM-ThinBloodSmearsPf may be redistributed as long as NLM's notice is kept and NLM is credited, and the MP-IDB repository is MIT-licensed. The repository therefore holds code, manifests and summary tables only. No image or crop is redistributed, and the Drive copies used for Colab are private and will be deleted after the project.
 
-**Protected categories.** The data carry no demographic variables, so results cannot be broken down by sex, age or ethnicity. This is a limitation, not a test that passed: a model could still work worse for some patient groups, and this project could not show it. The subgroups that can be analysed are the ones in Table 1, which are also the RQ3 subgroups: acquisition batch, species and life stage.
+**Protected categories.** The data carry no demographic variables, so results cannot be broken down by sex, age or ethnicity. A model could still work worse for some patient groups, and this project would have no way of seeing it; this is reported as a limitation. The subgroups that can be analysed are those in Table 1, which are also the RQ3 subgroups: acquisition batch, species and life stage.
 
-**Representativeness.** NIH comes from one hospital, one staining protocol and one smartphone-on-microscope setup, and it has a single species. Its 50/50 class balance is a result of curation: in the source photographs only 3.3% of annotated cells are parasitised, close to site_a's 2.7%. A model tuned to NIH's balance can therefore look better on the hold-out set than it would at clinical prevalence, which is why sensitivity and specificity are reported separately and accuracy is not. The external sets add a second species (*P. vivax*, BBBC041) and a European reference laboratory (MP-IDB), but no smears from sub-Saharan Africa, where most malaria deaths occur. The generalisation claims are limited to these three sources.
+**Representativeness.** All NIH images come from one hospital, with one staining protocol and one smartphone-on-microscope setup, and show a single species. NIH's 50/50 class balance was made by curation: in the source photographs only 3.3% of annotated cells are parasitised, close to site_a's 2.7%. A model tuned to that balance can look better on the hold-out set than it would at clinical prevalence, so sensitivity and specificity are reported separately and accuracy is not. The external sets add a second species (*P. vivax*, BBBC041) and a European reference laboratory (MP-IDB). None of the three has smears from sub-Saharan Africa, where most malaria deaths occur, and the generalisation claims go no further than these three sources.
 
 **Mitigations (ELSA Part B).** The D5 checklist (deon base items plus project items) is in the ELSA report, [`docs/elsa_report.md`](elsa_report.md), with answers to the panel-review questions. The table repeats its Part B: the mitigation for each item judged critical.
 
 | Item | How the project deals with it |
 |---|---|
-| A.2 Collection bias | Each source is treated as a separate domain and reported apart: site_a and site_b, and *P. falciparum* against the other species. There is no single pooled score that one site could dominate. The claims are limited to these three sources. |
-| A.4 No protected attributes | This is stated as a limitation, not as a test that passed: disparities by sex, age or ethnicity cannot be measured. The subgroups that can be measured (acquisition batch, species, life stage) are analysed instead in RQ3. |
+| A.2 Collection bias | Each source is reported as its own domain: site_a and site_b separately, and *P. falciparum* separately from the other species. No pooled score exists that one site could dominate, and the claims cover these three sources only. |
+| A.4 No protected attributes | Disparities by sex, age or ethnicity cannot be measured, and the report says so as a limitation. RQ3 analyses the subgroups that can be measured: acquisition batch, species and life stage. |
 | A.5 Licences | Only code, manifests and summary tables go into the repository. Raw images and crops stay out of git, and so do the Drive copies, which are kept for this non-commercial study only. BBBC041's share-alike term therefore never applies to a redistributed file, and each dataset paper is cited and NLM credited. |
-| A.6 Label quality | BBBC041's annotators marked 446 cells as `difficult`; these and the 103 leukocytes stay in the manifests but are left out of the primary metric. For each of MP-IDB's 210 images, the tracked `mpidb_stage_audit.csv` records how many parasites it holds, how many crops were shipped and where the stage labels came from. NIH labels are used as released; checking them again is out of scope and is stated as a limitation. |
+| A.6 Label quality | BBBC041's annotators marked 446 cells as `difficult`; these and the 103 leukocytes stay in the manifests but are left out of the primary metric. For each of MP-IDB's 210 images, the tracked `mpidb_stage_audit.csv` records how many parasites it holds, how many crops were shipped and where the stage labels came from. NIH labels are used as released. Checking them again is out of scope, which is reported as a limitation. |
 | A.7 Overlapping releases | 192 of the 200 cell_images patients and 960 of the release's 965 photographs appear in both NIH releases (`nih_source_overlap.csv`), so NIH-NLM-ThinBloodSmearsPf is never used as a test set. It is used only to recut NIH cells for the EDA, and every recut cell inherits its patient's split (`inherit_nih_split`), so no patient crosses splits even there. |
-| C.2 Prevalence mismatch | The NIH classes are not rebalanced, because the model trains at NIH's 50/50 split. The mismatch is handled at evaluation instead: sensitivity and specificity are reported separately, and neither depends on prevalence. Accuracy is not reported for BBBC041, and F1 is reported only as a secondary measure. |
+| C.2 Prevalence mismatch | The NIH classes are not rebalanced: the model trains at NIH's 50/50 split, and the prevalence mismatch is dealt with at evaluation. Sensitivity and specificity are reported separately because neither depends on prevalence. Accuracy is not reported for BBBC041, and F1 only as a secondary measure. |
 | C.6 Patient leakage | The NIH split is by patient, pinned in `nih_split.csv`, and checked before every training run. The overlapping NIH-NLM release is never used as a test set. |
 | D.2 Disparate error rates | Sensitivity is compared across species, with an interval on the difference, and across BBBC041 life stages, as share of misses and miss rate. Specificity is compared across the two BBBC041 batches. Every interval comes from resampling source images. |
 | D.3 Metric choice | A missed parasite (a patient left untreated) and a false alarm (unnecessary antimalarials) cost different things, so they are reported apart. The threshold is fixed at 0.5 before testing. AUC is only a threshold-free check. |
-| D.4 Explainability | Saliency methods such as Grad-CAM are out of scope, as the proposal already stated. RQ2 is a controlled test of what the models depend on: if removing the background or matching colour changes their decisions, the models were using those cues. |
+| D.4 Explainability | Saliency methods such as Grad-CAM were left out of scope in the proposal. RQ2 tests directly what the models depend on: if removing the background or matching the colour changes their decisions, they were using those cues. |
 | D.8 Shortcut learning | RQ2's first step puts the test cells into the NIH black-frame format. The share of the drop this recovers shows how much the models relied on the frame instead of the parasite. |
 | E.1 Regulation and redress | This is a research prototype, trained and tested on public data and never used on patients. The EU AI Act excludes AI systems developed only for scientific research (Art. 2(6)). A deployed diagnostic version would be a medical device (MDR 2017/745) and a high-risk AI system, requiring clinical validation, which this project does not do. |
-| E.5 Untested populations | The three sources are a hospital in Chittagong (NIH), the two acquisition batches of BBBC041 and a laboratory in Lausanne (MP-IDB); none is from sub-Saharan Africa. Every claim is limited to these sources, and each is reported on its own so that no pooled score hides one of them. The gap is stated as a limitation in the Methodology Overview and the final report. |
-| E.6 Automation bias | The models are research prototypes and are never used on patients; the README, the model information sheet and this report say so. Each output is a probability cut at a fixed 0.5 threshold, not a diagnosis, and the seed-0 results show how often it is wrong on new data: sensitivity on MP-IDB *P. falciparum* is between 28.6% and 57.4% across the three models. Any clinical use would need a microscopist to confirm every call and a separate clinical validation. |
+| E.5 Untested populations | The three sources are a hospital in Chittagong (NIH), the two acquisition batches of BBBC041 and a laboratory in Lausanne (MP-IDB), and none is from sub-Saharan Africa. Claims are limited to these sources, and each source is reported on its own so that a pooled score cannot hide one of them. The Methodology Overview and the final report both name the missing region as a limitation. |
+| E.6 Automation bias | The models are research prototypes and are never used on patients, as the README, the model information sheet and this report state. Each output is a probability cut at a fixed 0.5 threshold, not a diagnosis, and the seed-0 results show how often that call is wrong on new data: sensitivity on MP-IDB *P. falciparum* is between 28.6% and 57.4% across the three models. Clinical use would need a microscopist to confirm every call, plus a separate clinical validation. |
 
 *Table 2. ELSA Part B mitigations, copied from the ELSA report, where each row also says where it is implemented.*
 
@@ -141,7 +141,7 @@ NIH is split 70/15/15 by patient (`splits.patient_grouped_split`, seed 42). Pati
 | Photographs | 958 | 239 | 211 |
 | % parasitised | 50.1 | 50.4 | 49.2 |
 
-*Table 3. The three NIH splits are similar in size per patient, share of uninfected-only patients and class balance.*
+*Table 3. The three NIH splits have similar shares of uninfected-only patients and almost the same class balance.*
 
 ### 3.3 Data leakage
 
@@ -168,7 +168,7 @@ Table 4 lists every oddity found while preparing the data and what was done abou
 | Mask centre on background | For 1,029 of the 86,035 BBBC041 crops (1,022 of them primary cells), Otsu found no cell under the crop centre and kept the nearest region, which may be a neighbour. | Kept; RQ2 is also reported without these cells (`rq2_<model>_s0_without_nearest.csv`). |
 | Ambiguous and out-of-scope cells | BBBC041 has 446 `difficult` cells and 103 leukocytes. | Excluded from the primary metric, kept in the manifests (§3.1, step 4). |
 | Overlapping NIH releases | 192 of 200 patients and 960 of 965 photographs are shared. | The NIH-NLM release is never a test set (§3.3). |
-| Errors found in code review | A code review found that Reinhard transfer used a spread pooled over many cells, that histogram matching broke ties toward the dark end, and that the NIH bootstrap resampled photographs instead of patients. | Fixed before the results in §5.6; VGG-16 was re-scored on the corrected crops. |
+| Errors found in code review | Reinhard transfer used a spread pooled over many cells, histogram matching broke ties toward the dark end, and the NIH bootstrap resampled photographs instead of patients. | Fixed before the results in §5.6; VGG-16 was re-scored on the corrected crops. |
 | Missing values | None among the primary cells. | `CellDataset` raises an error on an unlabelled row. |
 
 *Table 4. Data-quality issues found during preparation and their status.*
@@ -197,7 +197,7 @@ The EDA ([`notebooks/03_eda_short.ipynb`](../notebooks/03_eda_short.ipynb), full
 
 *Figure 4. Tissue brightness, saturation and red minus blue per test set and class (boxes: quartiles; whiskers: 5th to 95th percentile).*
 
-Individual cells were inspected as well as distributions: Figure 2 shows random cells per set and class, and the full EDA record adds contact sheets and the smallest crops of each set, which were checked by eye for cut-off cells.
+Single cells were looked at as well as distributions. Figure 2 shows random cells per set and class, and the full EDA record adds contact sheets and the smallest crops of each set, which were checked by eye for cut-off cells.
 
 ## 5. Models and evaluation (stages E to H)
 
@@ -222,7 +222,7 @@ Following the literature review (§2.3), the baseline is the patient-grouped pro
 - *Output.* `models/<model>_s<seed>.pt`, a per-epoch log (`outputs/tables/<model>_s0_training_log.json`) and a resumable checkpoint written after every epoch. A resumed run must have the settings it started with, and keeps the commit it started at.
 - *Where it runs.* A Colab T4 GPU through `notebooks/10_train_colab.ipynb`, which unpacks the archive built by [`scripts/pack_for_colab.py`](../scripts/pack_for_colab.py). On the laptop, `train.py --smoke` checks the same code on 64 cells.
 
-**Class balance and resampling.** NIH training cells are 50.1% parasitised, so the training data are neither undersampled nor oversampled, and the loss is not reweighted. The imbalance that matters is at test time (2.7 to 5.1% on BBBC041). It is handled by reporting sensitivity and specificity separately, since neither depends on prevalence.
+**Class balance and resampling.** NIH training cells are 50.1% parasitised, so there is no undersampling, oversampling or loss reweighting. The imbalance that matters is in the test sets (2.7 to 5.1% parasitised on BBBC041), and it is handled by reporting sensitivity and specificity separately, since neither depends on prevalence.
 
 ### 5.2 RQ2 test inputs (stage F)
 
@@ -249,12 +249,12 @@ All values are fixed in advance (`SETTINGS` in `train.py`, `data.py`, `models.py
 
 | Hyperparameter | Value | Importance | Why this value |
 |---|---|---|---|
-| Learning rate | 1 × 10⁻⁴ | high | Sets how far the pretrained weights move. Loddo et al. (2022) fine-tuned the same three networks on NIH at this rate and found smaller rates learned too slowly and larger ones did not converge; Rajaraman et al. (2019) trained all layers at the same rate. |
-| Epochs and early stopping | at most 20; stop when NIH validation loss has not improved for 3 epochs; keep the best-validation weights | high | Decides how closely each model fits the NIH training patients. It replaces the fixed ten epochs of Loddo et al. (2022) and guards against training too long. All three models stopped early (Figure 6). |
+| Learning rate | 1 × 10⁻⁴ | high | Controls how far the pretrained weights move. Loddo et al. (2022) fine-tuned the same three networks on NIH at this rate; in their tests, smaller rates learned too slowly and larger ones did not converge. Rajaraman et al. (2019) also trained every layer at this low rate. |
+| Epochs and early stopping | at most 20; stop when NIH validation loss has not improved for 3 epochs; keep the best-validation weights | high | Decides how closely each model fits the NIH training patients. Early stopping replaces the fixed ten epochs of Loddo et al. (2022), so a model cannot keep training after validation loss stops improving. All three models stopped early (Figure 6). |
 | Decision threshold | 0.5 (`metrics.THRESHOLD`), fixed before any test set was seen | high | Sets the balance between sensitivity and specificity, the reported measures. At seed 0 the architectures differ mostly in where their scores fall relative to it (§5.6). |
 | Pretrained weights and trained layers | torchvision `IMAGENET1K_V1`; every layer trained | high | Stain and cell texture are far from ImageNet photographs, so the early layers need to adapt too; a frozen network with a new head (Rajaraman et al., 2018) can only reweight ImageNet features. |
 | Batch size | 32 | medium | Affects gradient noise and memory. 32 follows Loddo et al. (2022) and fits VGG-16 on a T4. |
-| Augmentation | horizontal and vertical flips, rotation by multiples of 90° (`data.augment`); no colour jitter | medium | A cell turned upside down is still the same cell, so these change neither colour nor the black frame. Colour jitter is left out on purpose: a model trained to ignore colour would leave less for RQ2's colour step to recover, by an amount set by an arbitrary jitter strength. Hou et al. (2026) trained with colour jitter and still saw specificity fall to 18.0% on BBBC041. |
+| Augmentation | horizontal and vertical flips, rotation by multiples of 90° (`data.augment`); no colour jitter | medium | A cell turned upside down is still the same cell, and these flips and rotations change neither its colour nor the black frame. Colour jitter is left out on purpose. A model trained to ignore colour would leave less for RQ2's colour step to recover, by an amount that depends on an arbitrary jitter strength. Hou et al. (2026) trained with colour jitter and still saw specificity fall to 18.0% on BBBC041. |
 | Input | 224 × 224, black padding to square, ImageNet mean and standard deviation | medium | Matches the pretrained weights; black padding matches how NIH crops are stored. |
 | Optimiser | Adam, betas (0.9, 0.999), weight decay 0 | low | PyTorch defaults, as in Loddo et al. (2022); not varied. |
 | Loss | `BCEWithLogitsLoss`, no class weights | low | The training data are 50.1% parasitised, so there is nothing to reweight. |
@@ -264,7 +264,7 @@ All values are fixed in advance (`SETTINGS` in `train.py`, `data.py`, `models.py
 
 *Table 6. Every hyperparameter, its value and its expected importance.*
 
-No grid search or Optuna is used. Tuning each architecture separately would make the RQ1 comparison partly a comparison of tuning budgets, and a free Colab GPU does not allow a search over three large networks. Only the seed varies, so that each final result is a distribution over runs instead of one run.
+No grid search or Optuna is used. Tuning each architecture separately would turn part of the RQ1 comparison into a comparison of tuning budgets, and a free Colab GPU cannot run a search over three large networks. Only the seed varies, so each final result is a spread over three runs.
 
 ### 5.4 Fair model comparison
 
@@ -278,7 +278,7 @@ The following are held constant across the three arms and across the RQ2 variant
 - the metric code and the bootstrap: each set's resamples are keyed by its name, so every model and variant is resampled on the same NIH patients and test photographs;
 - the code commit and the inputs, checked: `run.json` records, per prediction file, the checkpoint, the manifest hashes and a digest of the crops read, and `compare_models.py` refuses models whose inputs differ.
 
-What differs between arms is the architecture, and what differs between RQ2 variants is the test input. This is what lets a difference in drop be attributed to one of the two.
+Between arms only the architecture changes, and between RQ2 variants only the test input, so a difference in drop can be traced to one or the other.
 
 ### 5.5 Evaluation strategy (stages G and H)
 
@@ -286,15 +286,15 @@ What differs between arms is the architecture, and what differs between RQ2 vari
 
 **Metrics.** All definitions follow Table 2 of the literature review. The task is binary classification with parasitised as the positive class. *Sensitivity* is the share of parasitised cells called parasitised, and *specificity* the share of uninfected cells called uninfected. Specificity is measured on NIH and BBBC041 only, since MP-IDB has no uninfected cells. AUC is a threshold-free check on NIH and BBBC041. The *drop* is the NIH hold-out value minus the test-set value, in percentage points, per model and test set (`metrics.drop_pp`).
 
-**Why not accuracy or F1 as the main metric.** At 2.7% prevalence, a model that calls every BBBC041 cell uninfected scores 97.3% accuracy. F1 combines sensitivity with precision, and precision falls with prevalence even when the model does not change: Hou et al. (2026) show that a single operating point gives a precision of 15 to 27% below 1% prevalence and 66 to 90% at 5 to 20%. F1 is therefore reported as a secondary measure, with precision next to it and the prevalence of each set, on NIH and BBBC041 only (`metrics.precision_f1`); no drop in F1 is computed, because the NIH hold-out set is 49.2% parasitised and site_a 2.7%. On MP-IDB precision is 100% by construction and F1 would only repeat sensitivity. A high AUC can also sit alongside an unusable operating point: Zhao et al. (2020) report an AUC of 0.945 on BBBC041, while Hou et al. (2026) found 18.0% specificity at their threshold.
+**Why not accuracy or F1 as the main metric.** At 2.7% prevalence, a model that calls every BBBC041 cell uninfected scores 97.3% accuracy. F1 combines sensitivity with precision, and precision falls with prevalence even when the model stays the same: Hou et al. (2026) show that a single operating point gives a precision of 15 to 27% below 1% prevalence and 66 to 90% at 5 to 20%. F1 is reported as a secondary measure on NIH and BBBC041 only (`metrics.precision_f1`), with precision and each set's prevalence next to it. No drop in F1 is computed, because the NIH hold-out set is 49.2% parasitised and site_a 2.7%. On MP-IDB, precision is 100% by construction and F1 would only repeat sensitivity. AUC has its own blind spot: a high AUC can sit alongside an unusable operating point, as when Zhao et al. (2020) report an AUC of 0.945 on BBBC041 while Hou et al. (2026) found 18.0% specificity at their threshold.
 
 **Uncertainty.** Every value has a 95% percentile interval from a bootstrap that resamples *source images*, not cells (`metrics.bootstrap`, 2,000 resamples for every metric). Cells cut from one photograph share its stain, focus and lighting, so treating them as independent would make the intervals too narrow. The NIH hold-out set is resampled one level higher, by *patient* (30 patients, `metrics.reference_draws`), since a patient's photographs come from one slide. The test sets have no patient identifiers, so they are resampled by photograph. The interval for a drop comes from resampling the NIH hold-out set and the test set independently and taking the difference of the draws. Each set's random stream is keyed by its name (`metrics.resample_weights`): different sets are resampled independently, while the same set is resampled identically for every model and variant, which makes differences between models paired.
 
-**Model comparison (RQ1).** All arms are scored by `evaluate.py` on the same test sets, with the same cells and the same threshold. For every pair of models, test set and metric, `compare_models.py` gives the difference in drop with a paired bootstrap interval. With three models that is 24 comparisons. They share one 5% error budget (Bonferroni correction), so each interval is widened from 95% to 99.8%, and a difference counts as clear only when this adjusted interval excludes zero. Without the correction, about one of 24 comparisons could look clear by chance alone.
+**Model comparison (RQ1).** All arms are scored by `evaluate.py` on the same test sets, with the same cells and the same threshold. For every pair of models, test set and metric, `compare_models.py` gives the difference in drop with a paired bootstrap interval. With three models that is 24 comparisons. They share one 5% error budget (Bonferroni correction), so each interval is widened from 95% to 99.8%, and a difference counts as clear only when this wider interval excludes zero. Without the correction, about one in 24 comparisons could look clear by chance.
 
 **Ablation (RQ2).** The frozen models score each test set on F0, F1 and both F2 variants. The *share recovered* is (value after a step − value before it) divided by the RQ1 drop, reported for each step and in total (`metrics.share_recovered`). It is left undefined unless the raw drop is clearly above zero, i.e. the lower end of its 95% interval is positive: with no measurable drop there is nothing to recover, and dividing by a drop near zero gives meaningless shares, such as −62 on a 1.5-point drop whose interval includes zero.
 
-**Error analysis (RQ3).** `summarise_results.py` breaks down the misses of each model. Sensitivity on pooled other-species MP-IDB cells is compared with *P. falciparum*, with an image-resampled interval on the difference. For BBBC041, the table gives each life stage's share of all missed parasites (the RQ3 wording) together with its miss rate. The miss rate is shown because the shares follow the stage counts: trophozoites are 69% of site_a parasites, so they would account for most misses even at an average miss rate.
+**Error analysis (RQ3).** `summarise_results.py` breaks down the misses of each model. Sensitivity on pooled other-species MP-IDB cells is compared with *P. falciparum*, with an image-resampled interval on the difference. For BBBC041, the table gives each life stage's share of all missed parasites (the RQ3 wording) together with its miss rate. The miss rate is shown next to the share because shares follow the stage counts: trophozoites are 69% of site_a parasites, so they would account for most misses even with an average miss rate.
 
 **Out-of-sample testing.** The NIH hold-out patients are used once, after training, and BBBC041 and MP-IDB are never used for training, early stopping, the colour reference or the threshold. Both external sets are therefore out-of-distribution tests in the sense the MRQ needs.
 
@@ -316,7 +316,7 @@ The three arms were trained on a Colab T4 (VGG-16 on 30 September, ResNet-50 and
 
 *Figure 6. Training and NIH validation loss per epoch; the dotted line marks the best epoch, whose weights are kept. Training loss is measured on augmented cells during the epoch.*
 
-All three stopped early, and their best NIH validation losses differ by less than 0.002, so the three arms enter the external tests equally well fitted to NIH. After the best epoch, validation loss rose for all three while training loss mostly kept falling, the usual sign that further epochs would only fit the training patients more closely.
+All three stopped early, and their best NIH validation losses are within 0.002 of each other, so the three arms start the external tests equally well fitted to NIH. After the best epoch, validation loss rose for all three while training loss mostly kept falling: further epochs would only have fitted the training patients more closely.
 
 #### RQ1: how large is the drop, and does the lighter architecture lose less?
 
@@ -341,7 +341,7 @@ All three stopped early, and their best NIH validation losses differ by less tha
 
 All three models do equally well on NIH (AUC 0.996 to 0.997), and all three lose on at least one metric on every external set, but they lose in different places. MobileNetV2, the lighter architecture, does not lose less. It loses the most sensitivity on site_b and on both MP-IDB groups, by 17.7 to 58.2 points more than the heavier models, and every one of these differences stays clear of zero after the Bonferroni adjustment (for example 27.6 points more than VGG-16 on *P. falciparum*, adjusted interval 20.5 to 34.4). On site_a the order reverses: VGG-16 loses 31.0 points of specificity, 22.9 more than MobileNetV2 (adjusted 19.8 to 25.9). VGG-16 has the smallest AUC drop on both BBBC041 sites. Of the 24 pairwise differences, 20 stay clear of zero after adjustment ([`rq1_compare_s0.csv`](../outputs/tables/rq1_compare_s0.csv)).
 
-Much of the difference between the architectures lies in where their scores fall relative to the 0.5 threshold. VGG-16 calls 34% of BBBC041 cells parasitised, against 14% for ResNet-50 and 11% for MobileNetV2, which is why it keeps its sensitivity and loses specificity while the other two do the opposite. AUC, which ignores the threshold, still favours VGG-16 on both sites. The answer to RQ1's second part is therefore no at the fixed threshold, with the caveat that part of the lighter model's loss is a shift of its scores toward *uninfected* on the external sets.
+Much of the difference between the architectures comes from where their scores fall relative to the 0.5 threshold. VGG-16 calls 34% of BBBC041 cells parasitised, against 14% for ResNet-50 and 11% for MobileNetV2. That is why VGG-16 keeps its sensitivity and loses specificity, while the other two do the opposite. AUC, which ignores the threshold, still favours VGG-16 on both sites. At the fixed threshold, the answer to RQ1's second part is no, with one caveat: part of the lighter model's loss is a shift of its scores toward *uninfected* on the external sets.
 
 #### Secondary measure: precision and F1
 
@@ -356,7 +356,7 @@ Much of the difference between the architectures lies in where their scores fall
 
 *Table 9. Precision and F1 in %, with 95% intervals from resampling source images (NIH hold-out: patients), from `rq1_f1_<model>_s0.csv`. Not computed on MP-IDB, which has no uninfected cells.*
 
-F1 is between 97.4 and 97.7% on the NIH hold-out set for all three models and falls on BBBC041, most on site_a, where precision is 7.4 to 18.9%. At 2.7% prevalence, VGG-16's site_a specificity of 65.5% still means 26,684 false alarms against 2,134 parasites found, 12.5 for every parasite. F1 puts VGG-16 last on site_a although its site_a AUC is the highest of the three: at this prevalence its false alarms outnumber the parasites, so its F1 is set mostly by how many cells it calls parasitised at the fixed threshold. This is why F1 is reported next to sensitivity and specificity, not instead of them.
+F1 is between 97.4 and 97.7% on the NIH hold-out set for all three models and falls on BBBC041, most on site_a, where precision is 7.4 to 18.9%. At 2.7% prevalence, VGG-16's site_a specificity of 65.5% still means 26,684 false alarms against 2,134 parasites found, 12.5 for every parasite. F1 puts VGG-16 last on site_a although its site_a AUC is the highest of the three. At this prevalence its false alarms outnumber the parasites, so its F1 depends mostly on how many cells it calls parasitised at the fixed threshold. For this reason F1 is reported next to sensitivity and specificity and does not replace them.
 
 #### RQ3: species and life stages
 
@@ -370,7 +370,7 @@ F1 is between 97.4 and 97.7% on the NIH hold-out set for all three models and fa
 
 Only VGG-16 shows a species gap larger than its interval, and it runs the opposite way to a species effect: *P. falciparum*, the NIH species, is recognised less often. 1,230 of the 1,297 MP-IDB *P. falciparum* parasites are rings. On BBBC041 site_b, rings account for the largest share of misses for all three models (52 to 71%). On site_a, trophozoites (69% of the parasites) account for the largest share of misses for ResNet-50 and MobileNetV2, while their miss rate stays below that of rings and gametocytes. Leaving out the 346 fallback crops lowers *P. falciparum* sensitivity for all three models (to 53.2, 46.3 and 23.4%) and widens the gap to the other species (−27.4, −10.4 and −16.9 points). MobileNetV2's gap then also lies outside its interval (−28.3 to −5.2), so for MobileNetV2 the species result depends on these crops (`rq3_<model>_s0_without_fallback.csv`).
 
-Rings are missed more often than trophozoites in five of the six model and site combinations; the exception is MobileNetV2 on site_b, which misses 65% of rings and 80% of trophozoites. This fits their size: a ring is a chromatin dot of 1 to 2 µm, a few pixels in a resized cell crop, against 5 to 8 µm for a mature trophozoite (Hou et al., 2026). Since most MP-IDB *P. falciparum* parasites are rings, a likely reading of VGG-16's species gap is the stage mix rather than the species. The final analysis tests this directly by comparing ring sensitivity across the two MP-IDB groups, for each model and seed.
+Rings are missed more often than trophozoites in five of the six model and site combinations. The exception is MobileNetV2 on site_b, which misses 65% of rings and 80% of trophozoites. Their size fits this: a ring is a chromatin dot of 1 to 2 µm, a few pixels in a resized cell crop, while a mature trophozoite is 5 to 8 µm (Hou et al., 2026). Since most MP-IDB *P. falciparum* parasites are rings, VGG-16's species gap may come from the stage mix and not from the species itself. The final analysis tests this by comparing ring sensitivity between the two MP-IDB groups, for each model and seed.
 
 #### RQ2: background removal and colour matching
 
@@ -393,7 +393,7 @@ Rings are missed more often than trophozoites in five of the six model and site 
 
 Removing the background raises MP-IDB *P. falciparum* sensitivity for VGG-16 (recovering 36% of its drop) and ResNet-50 (25%), but not for MobileNetV2. It also raises site_b sensitivity for all three models (by 1.0 to 6.2 points), while it lowers site_a specificity for all three. Reinhard transfer raises site_a specificity for VGG-16 and MobileNetV2 but costs site_a sensitivity, down to 15.9% for MobileNetV2. Histogram matching pushes almost every cell to *parasitised* for all three models: sensitivity is 80 to 100% on every set, while specificity falls to 5.9 to 44.4% on site_a and 1.1 to 41.9% on site_b. Compared with the raw crops, no step raises AUC on either BBBC041 site for any model. Leaving out the 1,022 BBBC041 cells whose mask fell back to a neighbouring region changes no BBBC041 value by more than 2.2 points for any model (`rq2_<model>_s0_without_nearest.csv`).
 
-At the fixed threshold, the colour steps mostly move the models' scores instead of improving how well they separate the classes, and this holds for all three architectures. On MP-IDB, which has no uninfected cells, a higher sensitivity cannot tell a better model from one that calls more cells parasitised: histogram matching "recovers" 85 to 110% of the MP-IDB drops while destroying specificity on BBBC041. RQ2's share recovered is therefore read together with BBBC041 specificity and AUC for the same step (§5.8).
+At the fixed threshold, the colour steps mostly move the models' scores and, for all three architectures, do not improve how well the scores separate the classes. MP-IDB has no uninfected cells, so a higher sensitivity there cannot tell a better model from one that calls more cells parasitised: histogram matching "recovers" 85 to 110% of the MP-IDB drops while it destroys specificity on BBBC041. RQ2's share recovered is read together with BBBC041 specificity and AUC for the same step (§5.8).
 
 ### 5.7 Methodological alternatives considered
 
@@ -402,9 +402,9 @@ Most choices follow from one constraint: RQ2 can attribute a change in performan
 | Decision | Alternatives | Chosen | Why |
 |---|---|---|---|
 | Fine-tuning | frozen ImageNet features plus a new head (Rajaraman et al., 2018); all layers trained | all layers trained | stain and cell texture are far from ImageNet photographs, so the early layers need to adapt too |
-| NIH split | random cell-level split (Zhao et al., 2020); patient-grouped split | patient-grouped | a random split puts cells of one slide on both sides; Hou et al. (2026) found accuracy 1.5 points higher per cell than slide-disjoint |
-| Hyperparameter search | grid search or Optuna per model; fixed values from the literature | fixed values | keeps RQ1 a comparison of architectures, not of tuning budgets; fits a free Colab GPU |
-| How to test the explanations (RQ2) | colour augmentation or retraining on target images; editing the test inputs | edit the test inputs | needs no target labels, and the model stays fixed, so each step's effect is attributable; retraining answers a different question |
+| NIH split | random cell-level split (Zhao et al., 2020); patient-grouped split | patient-grouped | a random split puts cells of one slide on both sides; Hou et al. (2026) found per-cell accuracy 1.5 points higher than with a slide-disjoint split |
+| Hyperparameter search | grid search or Optuna per model; fixed values from the literature | fixed values | every architecture gets the same settings, so RQ1 compares architectures alone; fits a free Colab GPU |
+| How to test the explanations (RQ2) | colour augmentation or retraining on target images; editing the test inputs | edit the test inputs | needs no target labels and keeps the model fixed, so each step's effect can be attributed to it; retraining would answer a different question |
 | Background removal | rembg U²-Net or IS-Net (Qin et al., 2020); BiRefNet; Otsu on brightness | Otsu on brightness | median Dice 0.90 against the NIH hand-drawn outlines, against 0.03 for U²-Net, which found no cell in 21% of NIH crops; BiRefNet needs 31 s per crop on this laptop |
 | Colour matching | HSV shift; Macenko (Macenko et al., 2009); learned normalisation (Xu et al., 2025); Reinhard and histogram matching | Reinhard and histogram matching | both are simple and fully specified, and the EDA showed they bring the Giemsa stain channels to NIH while an HSV shift moves them away; Xu et al. (2025) found stain-vector methods beat Reinhard on malaria smears, so a Macenko step is a candidate extension |
 | MP-IDB framing | shipped parasite close-ups; whole-cell crops | whole-cell crops | the close-ups cut off the cell edge, and the shipped crops mix masked and unmasked formats by species |
@@ -415,16 +415,16 @@ Most choices follow from one constraint: RQ2 can attribute a change in performan
 
 ### 5.8 Design decisions for the final analysis
 
-The baseline raised eight questions about how the final results will be computed and read. They are settled as follows.
+The baseline raised eight questions about how the final results will be computed and read. These are the decisions taken:
 
-1. **Fixed hyperparameters** (Table 6) for all three arms, so that RQ1 compares architectures and not tuning budgets.
-2. **Three seeds per architecture** for the final results; the midterm baseline uses one. The seeds give the run-to-run spread next to the bootstrap intervals.
-3. **Paired bootstrap with a Bonferroni correction** for the RQ1 comparison: the 24 comparisons share one 5% error budget, so each interval is widened to 99.8%. At seed 0 the conclusion does not depend on the correction, since 20 of 24 differences stay clear with it.
-4. **Share recovered left undefined** unless the raw drop's 95% interval lies above zero.
-5. **Miss rate next to the share of misses** in the RQ3 stage table, because the shares follow the stage counts.
-6. **The 346 fallback crops are kept**, and RQ3 is also reported without them.
-7. **An MP-IDB sensitivity gain counts as recovery only if AUC on BBBC041 does not fall** for the same step, because MP-IDB cannot show whether the model simply calls more cells parasitised.
-8. **The AUC drop is reported next to the sensitivity and specificity drops** in RQ1, as a threshold-free view, since the architectures differ mainly in where their scores fall relative to the 0.5 threshold.
+1. Fixed hyperparameters (Table 6) for all three arms, so that RQ1 compares architectures alone.
+2. Three seeds per architecture for the final results, against one for the midterm baseline. The seeds give the run-to-run spread next to the bootstrap intervals.
+3. A paired bootstrap with a Bonferroni correction for the RQ1 comparison: the 24 comparisons share one 5% error budget, so each interval is widened to 99.8%. At seed 0 the conclusion does not depend on the correction, since 20 of 24 differences stay clear with it.
+4. Share recovered is left undefined unless the raw drop's 95% interval lies above zero.
+5. The RQ3 stage table shows the miss rate next to the share of misses, because the shares follow the stage counts.
+6. The 346 fallback crops are kept, and RQ3 is also reported without them.
+7. A sensitivity gain on MP-IDB counts as recovery only if AUC on BBBC041 does not fall for the same step, because MP-IDB cannot show whether the model simply calls more cells parasitised.
+8. RQ1 reports the AUC drop next to the sensitivity and specificity drops as a threshold-free view, since the architectures differ mainly in where their scores fall relative to the 0.5 threshold.
 
 ## 6. Reproducibility
 

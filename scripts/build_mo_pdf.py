@@ -69,6 +69,8 @@ def main() -> None:
     body = markdown.markdown(src.read_text(encoding="utf-8"),
                              extensions=["tables", "fenced_code", "sane_lists", "md_in_html"])
     body = absolute_links(inline_images(body, src.parent), src.parent)
+    # Markdown task-list boxes (the ELSA checklist) as ticked / empty boxes
+    body = body.replace("<li>[x] ", "<li>☑ ").replace("<li>[ ] ", "<li>☐ ")
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / "doc.html"
         page.write_text(f"<!doctype html><html lang='en'><meta charset='utf-8'>"
