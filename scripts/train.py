@@ -49,6 +49,7 @@ SETTINGS = {"lr": 1e-4, "batch_size": 32, "max_epochs": 20, "patience": 3,
 
 
 def seed_everything(seed: int) -> None:
+    """Seed Python, NumPy and torch (CPU and GPU)."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -94,6 +95,7 @@ def run_epoch(net, loader, device, loss_fn, optimiser=None, scaler=None):
 
 
 def main() -> None:
+    """Fine-tune one architecture on the NIH train patients with early stopping on validation loss."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--arch", required=True, choices=ARCHS)
     ap.add_argument("--seed", type=int, default=0)

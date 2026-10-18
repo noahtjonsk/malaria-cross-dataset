@@ -21,10 +21,12 @@ from malaria.manifests import load_manifest  # noqa: E402
 
 
 def _stats_for_path(rel: str) -> dict:
+    """Per-crop features of one cell (imagestats.image_stats)."""
     return image_stats(paths.ROOT / rel)
 
 
 def main() -> None:
+    """Per-crop features for every cell in a manifest, written to cell_stats*.csv."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--chunksize", type=int, default=256)

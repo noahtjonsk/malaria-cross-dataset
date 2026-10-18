@@ -74,10 +74,12 @@ def tqdm(iterable, **kw):
 
 
 def _frame(rows) -> pd.DataFrame:
+    """Rows as a manifest table with the shared columns and dtypes."""
     return pd.DataFrame(rows, columns=pd.Index(COLUMNS)).astype(DTYPES)
 
 
 def _rel(p) -> str:
+    """A path relative to the project root, with forward slashes."""
     return str(Path(p).resolve().relative_to(paths.ROOT)).replace("\\", "/")
 
 
@@ -85,6 +87,7 @@ def _rel(p) -> str:
 # NIH
 # =========================================================================
 def build_nih_manifest() -> pd.DataFrame:
+    """One row per NIH cell_images crop, labelled by folder, patient from the C### prefix."""
     rows = []
     for folder, label, split in ((paths.NIH_PARASITIZED, 1, "parasitized"),
                                  (paths.NIH_UNINFECTED, 0, "uninfected")):
@@ -111,6 +114,7 @@ def build_nih_manifest() -> pd.DataFrame:
 # =========================================================================
 def build_bbbc041_manifest(write_crops: bool = True,
                            skip_existing: bool = True) -> pd.DataFrame:
+    """One row per annotated BBBC041 object, cropped with the shared rule (crops.square_padded_box)."""
     rows = []
     for split, jf in paths.BBBC041_JSON.items():
         records = json.loads(jf.read_text())
@@ -216,6 +220,7 @@ def _shipped_stage_map(species: str):
 
 
 def _filename_stages(stem: str):
+    """Life stages encoded in an MP-IDB file name (R, T, S, G)."""
     return [paths.STAGE_NAMES[c] for c in _stem_key(stem)[2].split("_")
             if c in paths.STAGE_NAMES]
 
@@ -238,6 +243,7 @@ def _mpidb_stages(stem: str, n: int, shipped: dict):
 
 def build_mpidb_manifest(write_crops: bool = True,
                          skip_existing: bool = True):
+    """MP-IDB parasite close-ups from the gt/ masks, plus the audit of where each stage label came from."""
     rows, audit = [], []
     for species in paths.MPIDB_SPECIES:
         shipped = _shipped_stage_map(species)
@@ -349,6 +355,7 @@ class MpidbParasiteSeeds:
     """
 
     def __init__(self):
+        """Index every MP-IDB gt/ mask by (species, image stem)."""
         self._gt = {(species, stem): gt for species in paths.MPIDB_SPECIES
                     for stem, _, gt in _pair_img_gt(species)}
         self._key = None
@@ -356,6 +363,7 @@ class MpidbParasiteSeeds:
         self._comps = []
 
     def __call__(self, species, source_image, cell_id, window) -> np.ndarray:
+        """The parasite pixels of `cell_id` inside its crop `window` (r0, c0, r1, c1)."""
         key = (str(species), str(source_image))
         if key != self._key:
             self._mask = read_gray_mask(self._gt[key])
@@ -430,6 +438,7 @@ def read_nihpoly_gt(gt_path):
 
 
 def _polygon_mask(xy: np.ndarray, box) -> np.ndarray:
+    """Fill an outline polygon into a mask the size of `box`."""
     mask = np.zeros((box.height, box.width), np.uint8)
     cv2.fillPoly(mask, [np.round(xy - [box.c0, box.r0]).astype(np.int32)], 255)
     return mask
@@ -437,6 +446,7 @@ def _polygon_mask(xy: np.ndarray, box) -> np.ndarray:
 
 def _nihpoly_window(shape: str, xy: np.ndarray, h: int, w: int,
                     pad_frac: float = paths.CROP_PAD_FRAC):
+    """The crop window around a Polygon Set outline or a Point Set centre point."""
     if shape == "Polygon":
         c0, r0 = np.floor(xy.min(axis=0)).astype(int)
         c1, r1 = np.ceil(xy.max(axis=0)).astype(int) + 1   # half-open
@@ -452,6 +462,7 @@ def _nihpoly_window(shape: str, xy: np.ndarray, h: int, w: int,
 
 def build_nihpoly_manifest(sets=("polygon",), write_crops: bool = True,
                            skip_existing: bool = True) -> pd.DataFrame:
+    """NIH cells recut from NIH-NLM-ThinBloodSmearsPf, each inheriting its patient's split."""
     rows = []
     for set_name in sets:
         variants = NIHPOLY_VARIANTS[set_name]
@@ -526,6 +537,7 @@ def build_nihpoly_manifest(sets=("polygon",), write_crops: bool = True,
 
 # =========================================================================
 def build_all(write_crops: bool = True, skip_existing: bool = True):
+    """Build and write every dataset's manifest and all_cells.csv; returns (all cells, MP-IDB audit)."""
     paths.ensure_dirs()
 
     nih = build_nih_manifest()

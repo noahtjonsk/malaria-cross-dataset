@@ -55,6 +55,10 @@ VARIANT_SUFFIX = {"raw": "", "masked": "_masked", "reinhard": "_reinhard",
                   "histmatch": "_histmatch"}
 TEST_DATASETS = ("bbbc041", "mpidb_wholecell")
 NIH_SPLIT_SIZES = {"train": 19203, "val": 4178, "test": 4177}
+# The committed sample (scripts/make_sample.py): a fixed number of cells per
+# split and class, drawn from the pinned split, so its patients never cross.
+SAMPLE_PER_CLASS = {"train": 40, "val": 20, "test": 20}
+SAMPLE_SPLIT_SIZES = {s: 2 * n for s, n in SAMPLE_PER_CLASS.items()}
 
 
 def variant_manifest_files(variant: str) -> list:
@@ -80,8 +84,9 @@ def nih_cells(split: str | None = None) -> pd.DataFrame:
         raise AssertionError(f"{int(cells['split'].isna().sum())} NIH cells have no split")
     check_no_patient_leakage(cells)
     sizes = cells["split"].value_counts().to_dict()
-    if sizes != NIH_SPLIT_SIZES:
-        raise AssertionError(f"NIH split sizes {sizes} != pinned {NIH_SPLIT_SIZES}")
+    expected = SAMPLE_SPLIT_SIZES if paths.SAMPLE else NIH_SPLIT_SIZES
+    if sizes != expected:
+        raise AssertionError(f"NIH split sizes {sizes} != pinned {expected}")
     return cells if split is None else cells[cells["split"] == split].reset_index(drop=True)
 
 
@@ -130,7 +135,8 @@ def augment(rgb: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 
 
 def to_tensor(rgb: np.ndarray) -> torch.Tensor:
-    x = (rgb.astype(np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
+    """HWC uint8 RGB -> CHW float tensor with the ImageNet normalisation."""
+    x =(rgb.astype(np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
     return torch.from_numpy(np.ascontiguousarray(x.transpose(2, 0, 1)))
 
 
@@ -142,6 +148,7 @@ class CellDataset(Dataset):
     """
 
     def __init__(self, cells: pd.DataFrame, train: bool = False, seed: int = 0):
+        """Keep the crop paths and labels; rejects unlabelled rows."""
         if cells["label_binary"].isna().any():
             raise ValueError("unlabelled rows (e.g. BBBC041 difficult/leukocyte) "
                              "must be filtered out before building a dataset")
@@ -151,9 +158,11 @@ class CellDataset(Dataset):
         self.seed = seed
 
     def __len__(self) -> int:
+        """Number of cells."""
         return len(self.paths)
 
     def __getitem__(self, i: int):
+        """(input tensor, label, row index) for cell i, augmented when training."""
         rgb = load_input(self.paths[i])
         if self.train:
             # Seeded from torch, which gives every DataLoader worker its own
@@ -161,3 +170,24 @@ class CellDataset(Dataset):
             rng = np.random.default_rng(int(torch.randint(0, 2**31 - 1, (1,))))
             rgb = augment(rgb, rng)
         return to_tensor(rgb), torch.tensor(self.labels[i], dtype=torch.float32), i
+
+
+def self_test() -> None:
+    """Continuous-analysis checks on the cells a model sees (`make check`).
+
+    nih_cells() asserts the pinned split sizes and that no patient crosses
+    splits; every test set must have primary cells, all labelled, all readable.
+    """
+    nih = nih_cells()
+    print(f"NIH split {nih['split'].value_counts().to_dict()}: sizes pinned, no patient leakage")
+    for d in TEST_DATASETS:
+        cells = test_cells(d)
+        assert cells["label_binary"].notna().all(), f"unlabelled {d} rows"
+        x, y, _ = CellDataset(cells.head(1))[0]
+        assert x.shape == (3, paths.MODEL_INPUT, paths.MODEL_INPUT), x.shape
+        print(f"{d}: {len(cells):,} primary cells, input {tuple(x.shape)}")
+    print("data self-test passed" + (" (sample)" if paths.SAMPLE else ""))
+
+
+if __name__ == "__main__":
+    self_test()

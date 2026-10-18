@@ -32,6 +32,7 @@ FOLDER_PATIENT = re.compile(r"^\d+(C\d+)")
 
 
 def local_photos() -> pd.DataFrame:
+    """Parasitised and uninfected cell counts per photograph in cell_images."""
     counts = collections.defaultdict(collections.Counter)
     for folder, label in ((paths.NIH_PARASITIZED, "Parasitized"),
                           (paths.NIH_UNINFECTED, "Uninfected")):
@@ -50,6 +51,7 @@ def local_photos() -> pd.DataFrame:
 
 
 def online_photos() -> pd.DataFrame:
+    """Annotated cell counts per photograph in NIH-NLM-ThinBloodSmearsPf."""
     rows = []
     for set_name, set_dir in paths.NIHPOLY_SETS.items():
         for folder in sorted(set_dir.iterdir()):
@@ -72,6 +74,7 @@ def online_photos() -> pd.DataFrame:
 
 
 def main() -> None:
+    """Match the two releases by patient and photograph and write nih_source_overlap.csv."""
     local, online = local_photos(), online_photos()
     table = local.merge(online, on=["patient_id", "photo"], how="outer",
                         indicator=True)

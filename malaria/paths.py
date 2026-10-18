@@ -1,10 +1,18 @@
 """Every path the project uses, resolved from this file's location.
 
 Edit here and nowhere else.
+
+With the environment variable MALARIA_SAMPLE=1 (set by `make smoke`), manifests
+and crops are read from the committed sample in data/sample/ (built by
+scripts/make_sample.py) and every output goes to outputs/sample/, so the
+baseline pipeline runs end to end without the source datasets.
 """
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SAMPLE = os.environ.get("MALARIA_SAMPLE") == "1"
+SAMPLE_DIR = ROOT / "data" / "sample"
 
 # --- Source datasets (read-only) ---
 NIH_DIR = ROOT / "cell_images_NIH" / "cell_images"
@@ -40,7 +48,7 @@ NIHPOLY_SETS = {"polygon": NIHPOLY_DIR / "Polygon Set",
                 "point": NIHPOLY_DIR / "Point Set"}
 
 # --- Generated artefacts (written by this project) ---
-DATA = ROOT / "data"
+DATA = SAMPLE_DIR if SAMPLE else ROOT / "data"
 MANIFESTS = DATA / "manifests"
 CROPS = DATA / "crops"
 CROPS_BBBC041 = CROPS / "bbbc041"
@@ -50,12 +58,13 @@ CROPS_MPIDB_WHOLECELL = CROPS / "mpidb_wholecell"
 CROPS_MASKED = CROPS / "masked"        # <method>/<path under data/crops>, RQ2 step 1
 CROPS_COLOUR = CROPS / "colour"        # <method>/<path under the masked crops>, RQ2 step 2
 
-OUTPUTS = ROOT / "outputs"
+OUTPUTS = ROOT / "outputs" / "sample" if SAMPLE else ROOT / "outputs"
 FIGURES = OUTPUTS / "figures"
 TABLES = OUTPUTS / "tables"
 PREDICTIONS = OUTPUTS / "predictions"  # <arch>_s<seed>/<variant>_<set>.csv
 
-MODELS = ROOT / "models"               # trained checkpoints and training logs
+# trained checkpoints and training logs
+MODELS = OUTPUTS / "models" if SAMPLE else ROOT / "models"
 COLAB = ROOT / "colab"                 # zips uploaded to Colab (pack_for_colab.py)
 MO_FIGURES = ROOT / "docs" / "methodology" / "figures"
 

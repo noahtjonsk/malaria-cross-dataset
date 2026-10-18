@@ -27,6 +27,7 @@ from malaria.splits import check_no_patient_leakage, inherit_nih_split  # noqa: 
 
 
 def build_nihpoly(args) -> None:
+    """Recut NIH cells from the Polygon (and optionally Point) Set and write their manifest."""
     sets = ("polygon", "point") if args.nihpoly_point else ("polygon",)
     paths.ensure_dirs()
     cells = build_nihpoly_manifest(sets, write_crops=not args.dry_run,
@@ -45,6 +46,7 @@ def build_nihpoly(args) -> None:
 
 
 def build_mpidb_wholecell(args) -> None:
+    """Reframe every MP-IDB parasite on its host cell and check no parasite, label or ID was lost."""
     paths.ensure_dirs()
     cells, framing = build_mpidb_wholecell_manifest(write_crops=not args.dry_run,
                                                     skip_existing=not args.rebuild)
@@ -77,6 +79,7 @@ def build_mpidb_wholecell(args) -> None:
 
 
 def main() -> None:
+    """Build the manifests and crops selected by the command-line flags."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--rebuild", action="store_true",
                     help="re-encode crops that already exist")

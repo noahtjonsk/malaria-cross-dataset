@@ -18,10 +18,12 @@ cells = []
 
 
 def md(text):
+    """Append a Markdown cell."""
     cells.append(new_markdown_cell(text.strip()))
 
 
 def code(src, tags=()):
+    """Append a code cell, optionally tagged."""
     c = new_code_cell(src.strip())
     if tags:
         c.metadata["tags"] = list(tags)

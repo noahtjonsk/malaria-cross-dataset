@@ -42,6 +42,7 @@ a { color: #1a5fb4; text-decoration: none; }"""
 def inline_images(html: str, base: Path) -> str:
     """Replace every local image path with a data URI."""
     def repl(m):
+        """Inline an image as a data URI."""
         f = (base / m.group(1)).resolve()
         if not f.exists():
             raise SystemExit(f"missing image {f}")
@@ -53,12 +54,14 @@ def inline_images(html: str, base: Path) -> str:
 def absolute_links(html: str, base: Path) -> str:
     """Point links to repository files at GitHub, so they work outside the repo."""
     def repl(m):
+        """Point a relative link at the file in the repository."""
         target = (base / m.group(1)).resolve()
         return f'href="{REPO}{target.relative_to(ROOT).as_posix()}{m.group(2) or ""}"'
     return re.sub(r'href="(?!https?:|#|mailto:)([^"#]+)(#[^"]*)?"', repl, html)
 
 
 def main() -> None:
+    """Render a Markdown file to HTML and print it to an A4 PDF with headless Edge."""
     ap = argparse.ArgumentParser()
     ap.add_argument("source", type=Path)
     ap.add_argument("--out", type=Path)

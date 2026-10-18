@@ -89,6 +89,7 @@ def write_zip(dst: Path, files: list, compress: bool, manifests: list,
 
 
 def main() -> None:
+    """Write code.zip and the data zips for the chosen variants, each with a provenance file."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=VARIANTS)
     ap.add_argument("--code-only", action="store_true")

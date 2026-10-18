@@ -30,7 +30,10 @@ Writes outputs/tables/ (every table starts with model, arch and seed columns)
     rq3_<model>_without_fallback.csv
                        RQ3 again without the MP-IDB crops whose host cell was not
                        found (robustness check)
-and outputs/figures/R_<model>.png
+    confusion_<model>.csv
+                       predicted against actual class counts per test set, raw crops
+and outputs/figures/R_<model>.png (metrics with intervals) and CM_<model>.png
+(confusion matrices)
 """
 import argparse
 import sys
@@ -158,6 +161,7 @@ def rq2_table(variant_sets: dict, nih_test: pd.DataFrame, ref: dict, keep=None) 
     by_key = t.set_index(["variant", "test_set", "metric"])
 
     def value(variant, r, col="value"):
+        """One column of the summary table for a variant, set and metric (NaN if absent)."""
         key = (variant, r.test_set, r.metric)
         return by_key[col].get(key, np.nan)
 
@@ -223,7 +227,50 @@ def figure(model: str, rq1: pd.DataFrame, rq2: pd.DataFrame | None = None) -> No
     plt.close(fig)
 
 
+def confusion_table(raw: dict) -> pd.DataFrame:
+    """Predicted against actual class counts per reported set, at the fixed
+    threshold. MP-IDB has no uninfected cells, so its actual-uninfected row is 0."""
+    rows = []
+    for name, s in raw.items():
+        pred = (s["prob"] >= THRESHOLD).astype(int)
+        for actual in (1, 0):
+            for called in (1, 0):
+                rows.append({"test_set": name, "actual": actual, "predicted": called,
+                             "n": int(((s["label_binary"] == actual) & (pred == called)).sum())})
+    return pd.DataFrame(rows)
+
+
+def confusion_figure(model: str, cm: pd.DataFrame) -> None:
+    """One 2x2 confusion matrix per test set: counts, with each row's share of
+    its actual class, so sensitivity and specificity read off the diagonal."""
+    plots.set_style()
+    sets = list(dict.fromkeys(cm["test_set"]))
+    fig, axes = plt.subplots(1, len(sets), figsize=(2.4 * len(sets), 2.7))
+    labels = ["parasitised", "uninfected"]
+    for k, (ax, name) in enumerate(zip(np.atleast_1d(axes), sets)):
+        c = cm[cm["test_set"] == name].set_index(["actual", "predicted"])["n"]
+        counts = np.array([[c[(a, p)] for p in (1, 0)] for a in (1, 0)])
+        share = counts / np.maximum(counts.sum(axis=1, keepdims=True), 1)
+        ax.imshow(share, cmap="Blues", vmin=0, vmax=1)
+        for i in range(2):
+            for j in range(2):
+                text = f"{counts[i, j]:,}" + (f"\n{100 * share[i, j]:.1f}%" if counts[i].sum() else "")
+                ax.text(j, i, text, ha="center", va="center", fontsize=8,
+                        color="white" if share[i, j] > 0.6 else "black")
+        ax.set_xticks([0, 1], labels, fontsize=7)
+        ax.set_yticks([0, 1], labels if k == 0 else ["", ""], fontsize=7)
+        ax.set_xlabel("predicted", fontsize=8)
+        ax.set_title(name, fontsize=9)
+        ax.grid(False)
+    np.atleast_1d(axes)[0].set_ylabel("actual", fontsize=8)
+    fig.suptitle(f"{model}: confusion matrices on the raw crops, fixed 0.5 threshold "
+                 "(row % = share of the actual class)", fontsize=9, y=1.03)
+    plots.save(fig, f"CM_{model}")
+    plt.close(fig)
+
+
 def main() -> None:
+    """Write the RQ1, F1, RQ2, RQ3 and confusion tables and the figures for one run."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="run tag, e.g. resnet50_s0")
     ap.add_argument("--variants", nargs="+", default=list(VARIANTS), choices=VARIANTS,
@@ -235,6 +282,7 @@ def main() -> None:
     ident = {"model": args.model, "arch": arch, "seed": seed}
 
     def save(t: pd.DataFrame, name: str) -> None:
+        """Write a table with the model, arch and seed columns first."""
         t = pd.concat([pd.DataFrame(ident, index=t.index), t], axis=1)
         t.to_csv(paths.TABLES / name, index=False)
         print(f"wrote {name}")
@@ -265,7 +313,10 @@ def main() -> None:
 
     save(rq3_table(raw), f"rq3_{args.model}.csv")
     save(rq3_table(without_fallback(raw)), f"rq3_{args.model}_without_fallback.csv")
+    cm = confusion_table(raw)
+    save(cm, f"confusion_{args.model}.csv")
     figure(args.model, rq1, rq2)
+    confusion_figure(args.model, cm)
 
 
 if __name__ == "__main__":

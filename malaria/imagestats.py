@@ -68,6 +68,7 @@ CENTER_FEATURES = ["gray_mean_center", "gray_std_center", "lapvar224_center",
 
 
 def _radial_masks(size: int):
+    """Masks of a crop's outer ring and central disc, by distance from its centre."""
     yy, xx = np.mgrid[0:size, 0:size]
     c = (size - 1) / 2.0
     r = np.sqrt((yy - c) ** 2 + (xx - c) ** 2) / c

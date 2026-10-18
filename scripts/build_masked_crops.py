@@ -44,10 +44,12 @@ _SEEDS = None   # one per worker process
 
 
 def slug(method: str) -> str:
+    """A background method's name made safe for file paths."""
     return method.replace(":", "_")
 
 
 def _process(job) -> dict:
+    """Remove the background of one crop, write it, and return its mask status."""
     global _SEEDS
     cell_id, rel, out_rel, method, species, source_image, window = job
     bgr = cv2.imread(str(paths.ROOT / rel), cv2.IMREAD_COLOR)
@@ -81,6 +83,7 @@ def _process(job) -> dict:
 
 
 def main() -> None:
+    """Remove the background of the chosen test crops and write their manifest and status table."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--method", required=True, choices=METHODS)
     # Every RQ evaluates whole cells, so MP-IDB defaults to the host-cell framing;

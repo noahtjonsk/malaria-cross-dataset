@@ -56,6 +56,7 @@ def resample_weights(clusters, name: str, n_boot: int = N_BOOT) -> tuple:
 
 
 def _rates(tp, fn, tn, fp) -> dict:
+    """Sensitivity and specificity from confusion counts (NaN where undefined)."""
     with np.errstate(invalid="ignore", divide="ignore"):
         return {"sensitivity": np.divide(tp, tp + fn),
                 "specificity": np.divide(tn, tn + fp)}
@@ -134,6 +135,7 @@ def precision_f1(pred: pd.DataFrame, name: str, cluster: str = "source_image",
         return {k: (float("nan"), np.full(n_boot, np.nan)) for k in ("precision", "f1")}
 
     def rates(tp, fn, tn, fp):
+        """Precision and F1 from confusion counts (NaN where undefined)."""
         with np.errstate(invalid="ignore", divide="ignore"):
             return {"precision": np.divide(tp, tp + fp),
                     "f1": np.divide(2 * tp, 2 * tp + fp + fn)}
@@ -217,6 +219,7 @@ def self_test() -> None:
     rng = np.random.default_rng(0)
 
     def fake(n, perfect=True):
+        """A labelled prediction set of n cells, perfect or noisy, grouped into images."""
         y = rng.integers(0, 2, n)
         img = rng.integers(0, 40, n)
         p = y.astype(float) if perfect else np.round(rng.random(n) * 0.6 + 0.4 * y, 2)

@@ -48,6 +48,7 @@ from malaria.models import build_model  # noqa: E402
 
 @torch.no_grad()
 def predict(net, cells: pd.DataFrame, device, batch_size: int, workers: int) -> np.ndarray:
+    """Probability of parasitised for every cell, in the order of `cells`."""
     loader = DataLoader(CellDataset(cells), batch_size=batch_size, num_workers=workers,
                         pin_memory=device.type == "cuda")
     prob = np.empty(len(cells), dtype=np.float32)
@@ -59,6 +60,7 @@ def predict(net, cells: pd.DataFrame, device, batch_size: int, workers: int) -> 
 
 
 def main() -> None:
+    """Score the frozen model on the NIH hold-out set and each test set variant."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", type=Path, required=True)
     ap.add_argument("--variants", nargs="+", default=["raw"], choices=VARIANTS)
@@ -125,6 +127,7 @@ def csv_rows(path: Path) -> int:
 
 
 def write_json_atomic(path: Path, obj) -> None:
+    """Write JSON to a temporary file, then rename it into place."""
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(obj, indent=1, default=str))
     tmp.replace(path)

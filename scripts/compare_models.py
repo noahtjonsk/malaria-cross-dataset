@@ -60,6 +60,7 @@ def check_same_inputs(models: list, sets: dict) -> None:
 
 
 def main() -> None:
+    """Paired differences in drop between every pair of models, Bonferroni-adjusted."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", default=[paths.run_tag(a, 0) for a in ARCHS])
     ap.add_argument("--name", default="s0", help="suffix for the output files")

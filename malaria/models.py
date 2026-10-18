@@ -54,4 +54,5 @@ def check_all_trainable(net: nn.Module) -> None:
 
 
 def count_parameters(net: nn.Module) -> int:
+    """Number of parameters in a network."""
     return sum(p.numel() for p in net.parameters())

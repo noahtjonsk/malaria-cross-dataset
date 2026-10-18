@@ -51,6 +51,7 @@ _KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
 @functools.lru_cache(maxsize=None)
 def _rembg_session(model: str):
+    """A rembg session for `model`; rembg is imported only when first needed."""
     from rembg import new_session   # optional dependency, imported on first use
     return new_session(model)
 
@@ -204,6 +205,7 @@ def host_cell_box(rgb: np.ndarray, parasites: np.ndarray, parasite_box,
     cr, cc = (r0 + r1) / 2.0, (c0 + c1) / 2.0
 
     def centred(side, pad):
+        """A square box of side `side` centred on the parasite, padded by `pad`."""
         half = side / 2.0
         return square_padded_box(int(round(cr - half)), int(round(cc - half)),
                                  int(round(cr + half)), int(round(cc + half)),
@@ -242,12 +244,14 @@ def host_cell_box(rgb: np.ndarray, parasites: np.ndarray, parasite_box,
 
 
 def dice(a: np.ndarray, b: np.ndarray) -> float:
+    """Dice overlap of two binary masks (1 when both are empty)."""
     a, b = a.astype(bool), b.astype(bool)
     total = int(a.sum()) + int(b.sum())
     return 1.0 if total == 0 else 2.0 * int((a & b).sum()) / total
 
 
 def iou(a: np.ndarray, b: np.ndarray) -> float:
+    """Intersection over union of two binary masks (1 when both are empty)."""
     a, b = a.astype(bool), b.astype(bool)
     union = int((a | b).sum())
     return 1.0 if union == 0 else int((a & b).sum()) / union

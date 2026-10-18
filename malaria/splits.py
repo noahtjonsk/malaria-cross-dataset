@@ -73,6 +73,7 @@ def build_nih_split(manifest: pd.DataFrame, **kw) -> pd.DataFrame:
 
 
 def split_summary(nih: pd.DataFrame) -> pd.DataFrame:
+    """Cells, patients, photographs and share parasitised per split."""
     g = nih.groupby("split", observed=True)
     return pd.DataFrame({
         "cells": g.size(),

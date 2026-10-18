@@ -34,6 +34,7 @@ def split_sets(bbbc: pd.DataFrame, mpidb: pd.DataFrame) -> dict:
 
 
 def prediction_files(tag: str, variant: str) -> dict:
+    """{set name: prediction file} for one run and variant (raw adds the NIH hold-out set)."""
     d = paths.PREDICTIONS / tag
     files = {n: d / f"{variant}_{n}.csv" for n in TEST_DATASETS}
     if variant == "raw":

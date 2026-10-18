@@ -31,6 +31,7 @@ KEEP = ["domain", "format", "dataset", "source_split", "cell_id", "path",
 
 
 def _means(rel: str) -> dict:
+    """Tissue-only channel means of one crop in every colour space."""
     return tissue_channel_means(plots.load_rgb(rel, paths.MODEL_INPUT))
 
 
@@ -42,6 +43,7 @@ def sample(df: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
 
 
 def main() -> None:
+    """Colour statistics on a sample of cells per domain, written to colour_channel_stats.csv."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-domain", type=int, default=400)
     ap.add_argument("--masked", default=None,

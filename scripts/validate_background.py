@@ -47,6 +47,7 @@ def sample(df, n, seed, by="label_binary"):
 
 
 def load_cells(per_domain: int, seed: int) -> pd.DataFrame:
+    """A seeded sample of cells per domain: NIH outlines, BBBC041 and MP-IDB."""
     poly = load_manifest("nihpoly_cells.csv")
     poly = poly[(poly.source_split == "polygon_raw") & (poly.eval_group == "primary")]
     bbbc = load_manifest("bbbc041_cells.csv")
@@ -96,6 +97,7 @@ def score_method(cells: pd.DataFrame, method: str, seeds) -> tuple[pd.DataFrame,
 
 
 def summarise(res: pd.DataFrame) -> pd.DataFrame:
+    """Median and 10th percentile of Dice and parasite retention per domain and method."""
     g = res.groupby(["domain", "method"], sort=False)
     out = pd.DataFrame({
         "n": g.size(),
@@ -113,6 +115,7 @@ def summarise(res: pd.DataFrame) -> pd.DataFrame:
 
 
 def draw(examples: dict, method: str):
+    """Example crops with their masks for one method, two rows per domain."""
     doms = list(examples)
     fig, axes = plt.subplots(2 * len(doms), 8, figsize=(8 * 1.1, 2 * len(doms) * 1.15))
     axes = np.asarray(axes).reshape(2 * len(doms), 8)
@@ -135,6 +138,7 @@ def draw(examples: dict, method: str):
 
 
 def main() -> None:
+    """Score every background method on the sampled cells and write the tables and figures."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-domain", type=int, default=100)
     ap.add_argument("--methods", nargs="+", default=list(DEFAULT_METHODS))

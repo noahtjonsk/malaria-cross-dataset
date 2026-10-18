@@ -186,7 +186,9 @@ Tilburg, The Netherlands
 
 
 class Converter:
+    """Converts the Methodology Overview Markdown into the body of the LaTeX document."""
     def __init__(self, src: Path):
+        """Read the Markdown source and reset the section, table and figure counters."""
         self.src = src
         self.lines = src.read_text(encoding="utf-8").splitlines()
         self.sec = [0, 0]           # section, subsection
@@ -197,6 +199,7 @@ class Converter:
 
     # ---------- inline ----------
     def code(self, s: str) -> str:
+        """Escape text for LaTeX inside a code span."""
         out = []
         for ch in s:
             if ch in SPECIAL:
@@ -208,12 +211,14 @@ class Converter:
         return r"\texttt{" + "".join(out) + "}"
 
     def link_url(self, target: str) -> str:
+        """An absolute URL for a link: web links as they are, repository files on GitHub."""
         if target.startswith(("http://", "https://")):
             return target
         path = (self.src.parent / target).resolve().relative_to(ROOT).as_posix()
         return f"{REPO}/blob/main/{path}"
 
     def cite(self, authors: str, year: str) -> str:
+        """The biblatex citation for an author-year reference; stops on an unknown one."""
         name = "Di Cosmo" if authors.startswith("Di Cosmo") else re.match(r"[A-Za-z\-]+", authors).group(0)
         key = CITE_KEYS.get((name, year))
         if key is None:
@@ -222,9 +227,11 @@ class Converter:
         return key
 
     def inline(self, s: str) -> str:
+        """Convert inline Markdown (code, links, citations, emphasis) to LaTeX."""
         store = []
 
         def keep(latex: str) -> str:
+            """Store converted LaTeX and return a placeholder that later steps leave alone."""
             store.append(latex)
             return f"\x00{len(store) - 1}\x00"
 
@@ -259,6 +266,7 @@ class Converter:
 
     # ---------- blocks ----------
     def heading(self, level: int, text: str) -> str:
+        """A Markdown heading as a LaTeX section, appendix or the bibliography."""
         if text == "References":
             return ("\n\\nocite{" + ",".join(NOCITE) + "}\n"
                     "\\printbibliography[heading=ctbib,title=References]\n")
@@ -288,6 +296,7 @@ class Converter:
         return f"\n\\subsubsection*{{{self.inline(text)}}}\n"
 
     def table(self, rows: list, caption: str | None) -> str:
+        """A Markdown table as a LaTeX table, with its caption."""
         cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
         header, align, body = cells[0], cells[1], cells[2:]
         n = len(header)
@@ -295,6 +304,7 @@ class Converter:
         right = [a.endswith(":") and not a.startswith(":") for a in align]
 
         def plain(t: str, words: bool = False) -> str:
+            """Cell text without Markdown, used to size the table columns."""
             t = re.sub(r"\]\([^)]*\)|\[", "", t)
             if words:   # LaTeX may break code spans at / . _ and any word at an explicit hyphen
                 t = re.sub(r"`([^`]*)`", lambda m: re.sub(r"[/._]", " ", m.group(1)), t)
@@ -351,6 +361,7 @@ class Converter:
         return "\n".join(out) + "\n"
 
     def figure(self, target: str, caption: str) -> str:
+        """A Markdown image as a numbered LaTeX figure."""
         m = re.match(r"Figure (\d+)\. (.+)", caption)
         self.figures += 1
         assert m and int(m.group(1)) == self.figures, caption[:40]
@@ -360,6 +371,7 @@ class Converter:
                 f"\\caption{{{self.inline(m.group(2))}}}\n\\end{{figure}}\n")
 
     def code_block(self, lines: list) -> str:
+        """A fenced code block as LaTeX verbatim, ASCII only."""
         text = "\n".join(lines)
         text = (text.replace("├── ", "|-- ").replace("└── ", "`-- ").replace("│", "|").replace("─", "-")
                 .replace("…", "..."))
@@ -369,6 +381,7 @@ class Converter:
                 + text + "\n\\end{Verbatim}\n")
 
     def convert(self) -> str:
+        """The whole document as LaTeX: title-page fields, then every block in order."""
         meta = {}
         i = 0
         while not self.lines[i].startswith("## "):
@@ -449,7 +462,9 @@ class Converter:
 
 
 def compile_pdf() -> None:
+    """Run pdflatex, biber and pdflatex twice; stop with the log tail on an error."""
     def run(*cmd):
+        """Run one TeX tool in the output folder; stop with the log tail if it fails."""
         r = subprocess.run([str(TEXBIN / cmd[0]), *cmd[1:]], cwd=OUT_DIR, capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         if r.returncode != 0:
@@ -471,6 +486,7 @@ def compile_pdf() -> None:
 
 
 def main() -> None:
+    """Write the .tex from the Markdown and, unless --no-pdf, compile the PDF."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-pdf", action="store_true", help="only write the .tex")
     args = ap.parse_args()

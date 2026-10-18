@@ -65,13 +65,16 @@ class CropBox:
 
     @property
     def height(self) -> int:
+        """Rows in the box."""
         return self.r1 - self.r0
 
     @property
     def width(self) -> int:
+        """Columns in the box."""
         return self.c1 - self.c0
 
     def apply(self, image: np.ndarray) -> np.ndarray:
+        """Cut the box out of an image."""
         return image[self.r0:self.r1, self.c0:self.c1]
 
 
@@ -121,6 +124,7 @@ def mask_components(mask: np.ndarray, min_area: int = MIN_MASK_AREA):
 
 
 def read_gray_mask(path) -> np.ndarray:
+    """Read a mask image as one grey channel; raises if the file cannot be read."""
     m = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if m is None:
         raise FileNotFoundError(f"could not read mask: {path}")

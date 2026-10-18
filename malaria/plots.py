@@ -47,6 +47,7 @@ STAGE_ORDER = ["ring", "trophozoite", "schizont", "gametocyte", "unknown"]
 
 
 def set_style() -> None:
+    """The matplotlib style shared by every figure."""
     plt.rcParams.update({
         "figure.dpi": 110, "savefig.dpi": 160, "savefig.bbox": "tight",
         "font.size": 9, "axes.titlesize": 10, "axes.labelsize": 9,
@@ -77,13 +78,15 @@ def add_domain(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def domains_in(df: pd.DataFrame):
+    """The analysis domains present in a table, in DOMAIN_ORDER."""
     return [d for d in DOMAIN_ORDER if d in set(df["domain"].astype(str))]
 
 
 def save(fig, name: str) -> None:
+    """Write a figure to the figures folder as <name>.png."""
     paths.FIGURES.mkdir(parents=True, exist_ok=True)
     fig.savefig(paths.FIGURES / f"{name}.png")
-    print(f"  saved outputs/figures/{name}.png")
+    print(f"  saved {(paths.FIGURES / name).relative_to(paths.ROOT).as_posix()}.png")
 
 
 def feature_panels(stats: pd.DataFrame, features, titles=None, xlabels=None,
@@ -132,6 +135,7 @@ def feature_panels(stats: pd.DataFrame, features, titles=None, xlabels=None,
 
 
 def load_rgb(path, size: int | None = None) -> np.ndarray:
+    """Read a crop as RGB, optionally resized to a square of `size`."""
     bgr = cv2.imread(str(paths.ROOT / path), cv2.IMREAD_COLOR)
     if bgr is None:
         raise FileNotFoundError(path)

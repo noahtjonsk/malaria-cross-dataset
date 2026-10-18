@@ -40,6 +40,7 @@ ROWS = [("bbbc041", "site_a", 1, "BBBC041 site_a, parasitised"),
 
 
 def variants_figure(seed: int = 3) -> None:
+    """The same test cells as raw crops and after each RQ2 step (Figure 5)."""
     sets = {(d, v): test_cells(d, v).set_index("cell_id")
             for d in ("bbbc041", "mpidb_wholecell") for v, _ in VARIANTS}
     plots.set_style()
@@ -164,6 +165,7 @@ def pipeline_figure() -> None:
 
 
 def main() -> None:
+    """Copy the EDA figures and draw the Methodology Overview's own figures."""
     OUT.mkdir(parents=True, exist_ok=True)
     for name in COPY:
         shutil.copy(paths.FIGURES / name, OUT / name)

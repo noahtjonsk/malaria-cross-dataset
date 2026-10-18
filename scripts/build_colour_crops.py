@@ -51,6 +51,7 @@ _REF = None   # set once per worker process
 
 
 def _read_rgb(rel: str) -> np.ndarray:
+    """Read a crop as RGB; raises if the file cannot be read."""
     bgr = cv2.imread(str(paths.ROOT / rel), cv2.IMREAD_COLOR)
     if bgr is None:
         raise FileNotFoundError(rel)
@@ -68,11 +69,13 @@ def nih_reference(seed: int = 0) -> dict:
 
 
 def _init(ref: dict) -> None:
+    """Give each worker process the NIH colour reference."""
     global _REF
     _REF = ref
 
 
 def _process(job) -> None:
+    """Colour-match one masked crop with `method` and write it."""
     src, dst, method = job
     rgb = _read_rgb(src)
     if method == "reinhard":
@@ -86,6 +89,7 @@ def _process(job) -> None:
 
 
 def main() -> None:
+    """Build the colour reference from NIH train cells, then colour-match every masked test crop."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--method", nargs="+", default=list(METHODS), choices=METHODS)
     ap.add_argument("--workers", type=int, default=6)

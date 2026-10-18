@@ -63,6 +63,7 @@ def packed_crop_digests() -> dict:
 
 
 def file_hash_full(path) -> str:
+    """Full SHA-256 hex digest of a file."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):

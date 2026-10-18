@@ -7,6 +7,55 @@ The trained models are research prototypes for studying why malaria classifiers 
 performance across datasets. They have no clinical validation and must not be used to
 diagnose or screen patients.
 
+## Midterm Review
+
+The tagged commit `v1.0-final` holds the three Midterm Review components:
+
+- the Literature Review, [`LiteratureReview_NoahTjonSienKie.pdf`](LiteratureReview_NoahTjonSienKie.pdf);
+- the Methodology Overview, [`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md) (PDF: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf));
+- the proof-of-concept code for the baseline arm: three ImageNet-pretrained CNNs
+  (VGG-16, ResNet-50, MobileNetV2) fine-tuned on NIH and applied unchanged to BBBC041 and MP-IDB.
+
+**Quick check, no datasets needed.** The source datasets are several GB, so a small
+sample of the same cells is committed in [`data/sample/`](data/sample/README.md)
+(340 crops, 9 MB). From a clean Python 3.13 environment:
+
+```bash
+make install      # pip install -r requirements.txt
+make check        # metric self-test; NIH split sizes and patient leakage; readable test cells
+make smoke        # MobileNetV2, one epoch on the sample's NIH train cells (CPU, under a minute),
+                  # then predictions, results tables and confusion matrices in outputs/sample/
+```
+
+The log of that run is [`outputs/sample/smoke_run.log`](outputs/sample/smoke_run.log)
+(`make smoke-log`). The sample over-represents parasitised cells and trains for one
+epoch, so its numbers only show that the pipeline runs end to end.
+
+**The five proof-of-concept steps**, for the full data:
+
+| Step | Code | Output |
+|---|---|---|
+| Data ingestion and transformation | `scripts/build_crops.py` (+ `--mpidb-wholecell`); `malaria/manifests.py`, `crops.py` | one manifest per dataset, the cell crops |
+| Data split | `malaria/splits.py`, checked by `malaria.data.nih_cells` | [`data/manifests/nih_split.csv`](data/manifests/nih_split.csv): 70/15/15 by patient |
+| Model fitting (baseline only) | `scripts/train.py`, `malaria/models.py`, `malaria/data.py`; run on a Colab T4 through `notebooks/10_train_colab.ipynb` | weights; training logs [`outputs/tables/<model>_s0_training_log.json`](outputs/tables/) |
+| Predict on held-out sets | `scripts/evaluate.py` | per-cell probabilities for the NIH hold-out patients, BBBC041 and MP-IDB; record of inputs [`outputs/tables/<model>_s0_run.json`](outputs/tables/) |
+| Results table and error visualisation | `scripts/summarise_results.py`, `scripts/compare_models.py`, `malaria/metrics.py` | [`rq1_<model>_s0.csv`](outputs/tables/rq1_vgg16_s0.csv), [`confusion_<model>_s0.csv`](outputs/tables/confusion_vgg16_s0.csv), [`CM_<model>_s0.png`](outputs/figures/CM_vgg16_s0.png), [`R_<model>_s0.png`](outputs/figures/R_vgg16_s0.png), [`rq1_compare_s0.csv`](outputs/tables/rq1_compare_s0.csv) |
+
+**How the baseline line of the results table is built.** `evaluate.py` writes one
+probability per cell; `summarise_results.py --model <model>_s0` applies the fixed 0.5
+threshold, computes sensitivity, specificity and AUC per test set with 95% intervals
+from resampling source images (NIH hold-out: patients), and writes the drop from the NIH
+hold-out value in percentage points to `rq1_<model>_s0.csv`. These rows are Table 8 of
+the Methodology Overview. The confusion matrices `CM_<model>_s0.png` are drawn from the
+same predictions and reproduce those sensitivities and specificities exactly.
+`make results` rebuilds every table and figure from the predictions.
+
+**Trained models and predictions** are not in git because of their size (VGG-16 is
+0.5 GB). They are kept on the author's Google Drive (`MyDrive/malaria_thesis/`) and
+are available on request. What they produced is committed: training logs,
+`run.json` records (checkpoint hash, code commit, manifest hashes and a digest of every
+crop scored), and all result tables and figures.
+
 ## Run order
 
 ```bash
@@ -111,6 +160,9 @@ hand. Change the analysis there and regenerate, so the code stays diffable.
 
 | Path | What it is |
 |---|---|
+| `Makefile` | `check`, `smoke` (on the sample) and the full-pipeline targets |
+| `data/sample/` | committed sample of 340 crops with its manifests (`scripts/make_sample.py`) |
+| `outputs/sample/` | results of `make smoke`, and its log |
 | `malaria/paths.py` | every dataset root and output directory; edit here only |
 | `malaria/crops.py` | **the cropping rule**, documented in the module docstring |
 | `malaria/manifests.py` | per-cell manifests, one schema for all three datasets |
