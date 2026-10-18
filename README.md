@@ -12,7 +12,7 @@ diagnose or screen patients.
 The tagged commit `v1.0-final` holds the three Midterm Review components:
 
 - the Literature Review, [`LiteratureReview_NoahTjonSienKie.pdf`](LiteratureReview_NoahTjonSienKie.pdf);
-- the Methodology Overview, [`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md) (PDF: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf));
+- the Methodology Overview, [`docs/methodology_overview_v4.md`](docs/methodology_overview_v4.md) (PDF: [`docs/methodology_overview_v4.pdf`](docs/methodology_overview_v4.pdf));
 - the proof-of-concept code for the baseline arm: three ImageNet-pretrained CNNs
   (VGG-16, ResNet-50, MobileNetV2) fine-tuned on NIH and applied unchanged to BBBC041 and MP-IDB.
 
@@ -105,10 +105,13 @@ python scripts/build_mo_latex.py
 python scripts/build_mo_pdf.py docs/elsa_report.md
 ```
 
-The Methodology Overview (D3) is [`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md)
-(PDF in the literature review's LaTeX layout: [`docs/methodology_overview_v3.pdf`](docs/methodology_overview_v3.pdf),
-built from [`docs/methodology/mo_v3.tex`](docs/methodology/mo_v3.tex)); the earlier
-Markdown version is [`docs/methodology_overview.md`](docs/methodology_overview.md).
+The Methodology Overview (D3) is [`docs/methodology_overview_v4.md`](docs/methodology_overview_v4.md)
+(PDF in the literature review's LaTeX layout: [`docs/methodology_overview_v4.pdf`](docs/methodology_overview_v4.pdf),
+built from [`docs/methodology/mo_v4.tex`](docs/methodology/mo_v4.tex) by `scripts/build_mo_latex.py`).
+v4 is v3 with its links pointing at the capstone GitLab repository and the data sample
+described; v3 ([`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md), PDF
+alongside) links to GitHub. The earlier Markdown version is
+[`docs/methodology_overview.md`](docs/methodology_overview.md).
 The ELSA report (D5: the final commented checklist, mitigations and panel-review reflections) is
 [`docs/elsa_report.md`](docs/elsa_report.md); the earlier working checklist is
 [`docs/elsa_checklist.md`](docs/elsa_checklist.md).

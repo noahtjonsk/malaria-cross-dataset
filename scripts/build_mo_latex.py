@@ -1,14 +1,17 @@
 """The Methodology Overview as LaTeX, in the literature review's classicthesis style.
 
-    python scripts/build_mo_latex.py              # write docs/methodology/mo_v3.tex, compile, copy the PDF
+    python scripts/build_mo_latex.py              # v4: write docs/methodology/mo_v4.tex, compile, copy the PDF
+    python scripts/build_mo_latex.py --version 3  # rebuild v3 (links to GitHub)
     python scripts/build_mo_latex.py --no-pdf     # only write the .tex
 
-docs/methodology_overview_v3.md stays the source of truth; this script converts the
+docs/methodology_overview_v<N>.md stays the source of truth; this script converts the
 Markdown subset that document uses (headings, paragraphs, lists, pipe tables, images,
 captions, code blocks, links, citations) and stops on anything it cannot convert, so the
 LaTeX version never silently drops text. Compiled with TinyTeX:
 pdflatex -> biber -> pdflatex -> pdflatex. The PDF is copied to
-docs/methodology_overview_v3.pdf.
+docs/methodology_overview_v<N>.pdf. Links to repository files point at the repository
+each version was handed in with: v3 at GitHub, v4 at the capstone GitLab fork's
+v1.0-final tag.
 """
 import argparse
 import os
@@ -18,11 +21,12 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "docs" / "methodology_overview_v3.md"
 OUT_DIR = ROOT / "docs" / "methodology"
-TEX = OUT_DIR / "mo_v3.tex"
-PDF = ROOT / "docs" / "methodology_overview_v3.pdf"
-REPO = "https://github.com/noahtjonsk/malaria-cross-dataset"
+# version -> (repository, path prefix of a file view), set for the run by main()
+VERSIONS = {3: ("https://github.com/noahtjonsk/malaria-cross-dataset", "blob/main"),
+            4: ("https://gitlab.uvt.nl/capstone/2026-fall/u927271", "-/blob/v1.0-final")}
+SRC = TEX = PDF = None
+REPO, BLOB = VERSIONS[4]
 TEXBIN = Path(os.environ.get("APPDATA", "")) / "TinyTeX" / "bin" / "windows"
 
 # Author-year as written in the Markdown -> key in docs/methodology/refs.bib
@@ -211,11 +215,11 @@ class Converter:
         return r"\texttt{" + "".join(out) + "}"
 
     def link_url(self, target: str) -> str:
-        """An absolute URL for a link: web links as they are, repository files on GitHub."""
+        """An absolute URL for a link: web links as they are, repository files in REPO."""
         if target.startswith(("http://", "https://")):
             return target
         path = (self.src.parent / target).resolve().relative_to(ROOT).as_posix()
-        return f"{REPO}/blob/main/{path}"
+        return f"{REPO}/{BLOB}/{path}"
 
     def cite(self, authors: str, year: str) -> str:
         """The biblatex citation for an author-year reference; stops on an unknown one."""
@@ -489,7 +493,13 @@ def main() -> None:
     """Write the .tex from the Markdown and, unless --no-pdf, compile the PDF."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-pdf", action="store_true", help="only write the .tex")
+    ap.add_argument("--version", type=int, default=4, choices=sorted(VERSIONS))
     args = ap.parse_args()
+    global SRC, TEX, PDF, REPO, BLOB
+    SRC = ROOT / "docs" / f"methodology_overview_v{args.version}.md"
+    TEX = OUT_DIR / f"mo_v{args.version}.tex"
+    PDF = ROOT / "docs" / f"methodology_overview_v{args.version}.pdf"
+    REPO, BLOB = VERSIONS[args.version]
     conv = Converter(SRC)
     TEX.write_text(conv.convert(), encoding="utf-8")
     print(f"wrote {TEX.relative_to(ROOT)}: {conv.tables} captioned appendix/body tables in the last "

@@ -41,6 +41,7 @@ colab/
 *.pdf
 !LiteratureReview_NoahTjonSienKie.pdf
 !docs/methodology_overview_v3.pdf
+!docs/methodology_overview_v4.pdf
 !docs/elsa_report.pdf
 ~$*
 
