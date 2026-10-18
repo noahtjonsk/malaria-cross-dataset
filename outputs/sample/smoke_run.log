@@ -1,0 +1,37 @@
+python -m malaria.metrics
+metrics self-test passed
+python -m malaria.data
+NIH split {'train': 80, 'val': 40, 'test': 40}: sizes pinned, no patient leakage
+bbbc041: 120 primary cells, input (3, 224, 224)
+mpidb_wholecell: 60 primary cells, input (3, 224, 224)
+data self-test passed (sample)
+python scripts/train.py --arch mobilenet_v2 --smoke --workers 0
+mobilenet_v2 seed 0 on cpu: 64 train, 32 val cells
+2,225,153 parameters, all trainable
+epoch  1  train loss 0.6479  val loss 0.6425  val sens 0.062  spec 1.000  *  7s
+done (max epochs); best val loss 0.6425 -> C:\Users\noaht\Downloads\Thesis\outputs\sample\models\mobilenet_v2_s0_smoke.pt
+python scripts/evaluate.py --checkpoint outputs/sample/models/mobilenet_v2_s0_smoke.pt --workers 0 --force
+mobilenet_v2_s0_smoke: best epoch 1, val loss 0.6425, on cpu
+  raw       nih_test             40 cells    2.5% called parasitised -> raw_nih_test.csv
+  raw       bbbc041             120 cells   11.7% called parasitised -> raw_bbbc041.csv
+  raw       mpidb_wholecell      60 cells    6.7% called parasitised -> raw_mpidb_wholecell.csv
+python scripts/summarise_results.py --model mobilenet_v2_s0_smoke --variants raw
+wrote rq1_mobilenet_v2_s0_smoke.csv
+wrote rq1_f1_mobilenet_v2_s0_smoke.csv
+        test_set      metric  n_cells  n_images  value  ci_low  ci_high  drop_pp  drop_ci_low  drop_ci_high
+        nih_test sensitivity       40        37  0.050   0.000    0.200      NaN          NaN           NaN
+        nih_test specificity       40        37  1.000   1.000    1.000      NaN          NaN           NaN
+        nih_test         auc       40        37  0.942   0.870    0.995      NaN          NaN           NaN
+  bbbc041/site_a sensitivity       60        59  0.200   0.067    0.344  -15.000      -31.036         4.697
+  bbbc041/site_a specificity       60        59  1.000   1.000    1.000    0.000        0.000         0.000
+  bbbc041/site_a         auc       60        59  0.647   0.493    0.779   29.583       14.424        45.958
+  bbbc041/site_b sensitivity       60        50  0.233   0.091    0.387  -18.333      -35.721         1.624
+  bbbc041/site_b specificity       60        50  0.967   0.885    1.000    3.333        0.000        11.538
+  bbbc041/site_b         auc       60        50  0.850   0.740    0.948    9.250       -2.996        21.331
+mpidb/falciparum sensitivity       30        22  0.067   0.000    0.152   -1.667      -13.333        15.061
+     mpidb/other sensitivity       30        28  0.067   0.000    0.172   -1.667      -13.795        14.612
+wrote rq3_mobilenet_v2_s0_smoke.csv
+wrote rq3_mobilenet_v2_s0_smoke_without_fallback.csv
+wrote confusion_mobilenet_v2_s0_smoke.csv
+  saved outputs/sample/figures/R_mobilenet_v2_s0_smoke.png
+  saved outputs/sample/figures/CM_mobilenet_v2_s0_smoke.png
