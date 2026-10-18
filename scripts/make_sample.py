@@ -1,4 +1,4 @@
-"""Build the committed sample in data/sample/ that `make smoke` runs on.
+"""Build the committed sample in tests/fixtures/sample/ that `make all` runs on.
 
     python scripts/make_sample.py          # needs the full manifests and crops
 
@@ -16,14 +16,13 @@ Parasitised cells are over-represented in the external sets (BBBC041 is only
 2.7-5.1% parasitised), so that every reported set has both classes where it
 can; the sample checks that the code runs, not the size of any effect.
 
-Writes
-    data/sample/crops/<dataset>/<cell_id>.png   copies of the crops, unchanged
-    data/sample/manifests/                      nih_cells.csv, nih_split.csv,
-                                                bbbc041_cells.csv, mpidb_wholecell_cells.csv
-                                                (same schema, paths pointing at the copies)
-    outputs/sample/tables/mpidb_wholecell_framing.csv
-                                                the framing rows of the sampled MP-IDB
-                                                cells, read by summarise_results.py
+Writes, under tests/fixtures/sample/
+    crops/<dataset>/<cell_id>.png   copies of the crops, unchanged
+    manifests/                      nih_cells.csv, nih_split.csv, bbbc041_cells.csv,
+                                    mpidb_wholecell_cells.csv (same schema, paths
+                                    pointing at the copies)
+    mpidb_wholecell_framing.csv     the framing rows of the sampled MP-IDB cells,
+                                    read by summarise_results.py
 """
 import shutil
 import sys
@@ -44,7 +43,7 @@ PER_CLASS = 30
 SEED = 0
 OUT_MANIFESTS = paths.SAMPLE_DIR / "manifests"
 OUT_CROPS = paths.SAMPLE_DIR / "crops"
-OUT_TABLES = paths.ROOT / "outputs" / "sample" / "tables"
+OUT_FRAMING = paths.SAMPLE_DIR / "mpidb_wholecell_framing.csv"
 
 
 def draw(cells: pd.DataFrame, by: str, n: int) -> pd.DataFrame:
@@ -54,7 +53,7 @@ def draw(cells: pd.DataFrame, by: str, n: int) -> pd.DataFrame:
 
 
 def copy_crops(cells: pd.DataFrame, dataset: str) -> pd.DataFrame:
-    """Copy each crop into data/sample/crops/<dataset>/ and repoint `path` at it."""
+    """Copy each crop into the sample's crops/<dataset>/ and repoint `path` at it."""
     out = OUT_CROPS / dataset
     out.mkdir(parents=True, exist_ok=True)
     new = []
@@ -66,10 +65,11 @@ def copy_crops(cells: pd.DataFrame, dataset: str) -> pd.DataFrame:
 
 
 def main() -> None:
+    readme = paths.SAMPLE_DIR / "README.md"          # hand-written, kept across rebuilds
+    readme = readme.read_text(encoding="utf-8") if readme.exists() else None
     if paths.SAMPLE_DIR.exists():
         shutil.rmtree(paths.SAMPLE_DIR)
     OUT_MANIFESTS.mkdir(parents=True)
-    OUT_TABLES.mkdir(parents=True, exist_ok=True)
 
     nih = pd.concat([draw(nih_cells(s), "label_binary", n) for s, n in SAMPLE_PER_CLASS.items()])
     nih = copy_crops(nih, "nih")
@@ -88,8 +88,9 @@ def main() -> None:
     mpidb[COLUMNS].to_csv(OUT_MANIFESTS / "mpidb_wholecell_cells.csv", index=False)
 
     framing = pd.read_csv(paths.TABLES / "mpidb_wholecell_framing.csv")
-    framing[framing["cell_id"].isin(mpidb["cell_id"])].to_csv(
-        OUT_TABLES / "mpidb_wholecell_framing.csv", index=False)
+    framing[framing["cell_id"].isin(mpidb["cell_id"])].to_csv(OUT_FRAMING, index=False)
+    if readme:
+        (paths.SAMPLE_DIR / "README.md").write_text(readme, encoding="utf-8")
 
     print(f"NIH {nih.groupby('split').size().to_dict()}, "
           f"BBBC041 {bbbc.groupby(['source_split', 'label_binary']).size().to_dict()}, "

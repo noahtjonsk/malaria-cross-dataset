@@ -173,7 +173,7 @@ class CellDataset(Dataset):
 
 
 def self_test() -> None:
-    """Continuous-analysis checks on the cells a model sees (`make check`).
+    """Continuous-analysis checks on the cells a model sees (`make data`).
 
     nih_cells() asserts the pinned split sizes and that no patient crosses
     splits; every test set must have primary cells, all labelled, all readable.

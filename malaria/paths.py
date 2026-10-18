@@ -2,8 +2,8 @@
 
 Edit here and nowhere else.
 
-With the environment variable MALARIA_SAMPLE=1 (set by `make smoke`), manifests
-and crops are read from the committed sample in data/sample/ (built by
+With the environment variable MALARIA_SAMPLE=1 (set by `make all`), manifests
+and crops are read from the committed sample in tests/fixtures/sample/ (built by
 scripts/make_sample.py) and every output goes to outputs/sample/, so the
 baseline pipeline runs end to end without the source datasets.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE = os.environ.get("MALARIA_SAMPLE") == "1"
-SAMPLE_DIR = ROOT / "data" / "sample"
+SAMPLE_DIR = ROOT / "tests" / "fixtures" / "sample"
 
 # --- Source datasets (read-only) ---
 NIH_DIR = ROOT / "cell_images_NIH" / "cell_images"

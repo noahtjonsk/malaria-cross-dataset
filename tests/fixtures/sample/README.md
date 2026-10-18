@@ -1,7 +1,7 @@
 # Data sample
 
 A small, fixed sample of the cells the baseline is trained and scored on, so the
-pipeline can be checked end to end without the source datasets (`make smoke`).
+pipeline can be checked end to end without the source datasets (`make all`).
 Built by `scripts/make_sample.py` from the full manifests; the crops are copied
 unchanged.
 

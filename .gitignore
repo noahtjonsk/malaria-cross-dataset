@@ -51,5 +51,9 @@ __pycache__/
 .vscode/
 .idea/
 
+# `make all` on the sample: rebuilt on every run; only its log is kept
+outputs/sample/*
+!outputs/sample/smoke_run.log
+
 # Per-cell status of the full background-removal run (8 MB), rebuilt by build_masked_crops.py
 outputs/tables/masked_otsu-gray_status.csv

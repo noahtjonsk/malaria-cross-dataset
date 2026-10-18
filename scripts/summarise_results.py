@@ -56,7 +56,7 @@ from malaria.metrics import (REFERENCE_CLUSTER, THRESHOLD, bootstrap,  # noqa: E
 from malaria.results import SET_COLOURS, load  # noqa: E402
 
 MASK_STATUS = paths.TABLES / "masked_otsu-gray_status.csv"
-FRAMING = paths.TABLES / "mpidb_wholecell_framing.csv"
+FRAMING = (paths.SAMPLE_DIR if paths.SAMPLE else paths.TABLES) / "mpidb_wholecell_framing.csv"
 
 
 def rq3_table(raw: dict) -> pd.DataFrame:

@@ -1,7 +1,0 @@
-model,arch,seed,test_set,metric,n_cells,prevalence,value,ci_low,ci_high
-mobilenet_v2_s0_smoke,mobilenet_v2,0,nih_test,precision,40,0.5,1.0,1.0,1.0
-mobilenet_v2_s0_smoke,mobilenet_v2,0,nih_test,f1,40,0.5,0.09523809523809523,0.0,0.3333333333333333
-mobilenet_v2_s0_smoke,mobilenet_v2,0,bbbc041/site_a,precision,60,0.5,1.0,1.0,1.0
-mobilenet_v2_s0_smoke,mobilenet_v2,0,bbbc041/site_a,f1,60,0.5,0.3333333333333333,0.125,0.5116577221228382
-mobilenet_v2_s0_smoke,mobilenet_v2,0,bbbc041/site_b,precision,60,0.5,0.875,0.6,1.0
-mobilenet_v2_s0_smoke,mobilenet_v2,0,bbbc041/site_b,f1,60,0.5,0.3684210526315789,0.16,0.5454545454545454

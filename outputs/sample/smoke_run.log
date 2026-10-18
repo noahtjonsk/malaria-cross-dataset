@@ -5,10 +5,17 @@ NIH split {'train': 80, 'val': 40, 'test': 40}: sizes pinned, no patient leakage
 bbbc041: 120 primary cells, input (3, 224, 224)
 mpidb_wholecell: 60 primary cells, input (3, 224, 224)
 data self-test passed (sample)
+python -m malaria.splits
+       cells  patients  share_of_cells  parasitised_rate
+split                                                   
+train     80        54            0.50               0.5
+test      40        22            0.25               0.5
+val       40        16            0.25               0.5
+split check passed (sample)
 python scripts/train.py --arch mobilenet_v2 --smoke --workers 0
 mobilenet_v2 seed 0 on cpu: 64 train, 32 val cells
 2,225,153 parameters, all trainable
-epoch  1  train loss 0.6479  val loss 0.6425  val sens 0.062  spec 1.000  *  7s
+epoch  1  train loss 0.6479  val loss 0.6425  val sens 0.062  spec 1.000  *  9s
 done (max epochs); best val loss 0.6425 -> C:\Users\noaht\Downloads\Thesis\outputs\sample\models\mobilenet_v2_s0_smoke.pt
 python scripts/evaluate.py --checkpoint outputs/sample/models/mobilenet_v2_s0_smoke.pt --workers 0 --force
 mobilenet_v2_s0_smoke: best epoch 1, val loss 0.6425, on cpu

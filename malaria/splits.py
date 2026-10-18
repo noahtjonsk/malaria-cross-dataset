@@ -107,3 +107,27 @@ def check_no_patient_leakage(nih: pd.DataFrame) -> None:
     bad = pd.Series(per)[pd.Series(per) > 1]
     if len(bad):
         raise AssertionError(f"patients in >1 split: {list(bad.index)}")
+
+
+def main() -> None:
+    """The `make split` stage: check the pinned split every model trains on.
+
+    data.nih_cells() checks the pinned sizes and that no patient crosses
+    splits. On the full data the split is also recomputed from the manifest and
+    must equal nih_split.csv row for row; the sample holds a subset of the
+    pinned rows, so there it is checked but not recomputed.
+    """
+    from .data import nih_cells   # data imports this module
+    cells = nih_cells()
+    if not paths.SAMPLE:
+        fresh = patient_grouped_split(cells)
+        if not fresh.equals(cells["split"].rename("split")):
+            raise AssertionError(f"{int((fresh != cells['split']).sum())} cells differ "
+                                 "from the pinned nih_split.csv")
+        print("recomputed patient-grouped split (seed 42) equals nih_split.csv")
+    print(split_summary(cells).round(3).to_string())
+    print("split check passed" + (" (sample)" if paths.SAMPLE else ""))
+
+
+if __name__ == "__main__":
+    main()
