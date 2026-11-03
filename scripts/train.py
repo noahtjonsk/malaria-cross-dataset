@@ -163,11 +163,12 @@ def main() -> None:
         net.load_state_dict(ck["model"])
         optimiser.load_state_dict(ck["optimiser"])
         scaler.load_state_dict(ck["scaler"])
-        torch.set_rng_state(ck["torch_rng"])
+        # map_location moved the RNG states to the GPU; the setters need CPU ByteTensors.
+        torch.set_rng_state(ck["torch_rng"].cpu())
         if "loader_rng" in ck:   # checkpoints from before this was saved lack it
-            loader_rng.set_state(ck["loader_rng"])
+            loader_rng.set_state(ck["loader_rng"].cpu())
         if ck.get("cuda_rng") and device.type == "cuda":
-            torch.cuda.set_rng_state_all(ck["cuda_rng"])
+            torch.cuda.set_rng_state_all([s.cpu() for s in ck["cuda_rng"]])
         state = ck["state"]
         print(f"resumed after epoch {state['epoch']}")
 
