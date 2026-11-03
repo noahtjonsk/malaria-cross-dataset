@@ -37,7 +37,7 @@ from malaria.data import (TEST_DATASETS, VARIANTS, nih_cells, test_cells,  # noq
                           variant_manifest_files)
 
 OUT = paths.COLAB
-CODE = ["malaria/*.py", "scripts/*.py", "notebooks/10_train_colab.ipynb",
+CODE = ["malaria/*.py", "scripts/*.py", "scripts/*.sh", "notebooks/10_train_colab.ipynb",
         "requirements.txt", "data/manifests/nih_split.csv",
         "data/manifests/mpidb_stage_audit.csv",
         "outputs/tables/masked_otsu-gray_status.csv",   # RQ2 robustness check
