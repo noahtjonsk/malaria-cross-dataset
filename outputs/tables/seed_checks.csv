@@ -1,0 +1,49 @@
+finding,arch,seed,holds,value
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_a,resnet50,0,False,17.933583095855145
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_a,mobilenet_v2,1,True,20.084756221136068
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_a,mobilenet_v2,2,True,31.88717889495369
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_b,mobilenet_v2,0,True,66.71725566717257
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_b,mobilenet_v2,1,True,31.13295271132952
+RQ1 MobileNetV2 has the largest sensitivity drop on bbbc041/site_b,mobilenet_v2,2,True,80.24860880248609
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/falciparum,mobilenet_v2,0,True,68.47582011266877
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/falciparum,resnet50,1,False,54.34611409072405
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/falciparum,mobilenet_v2,2,True,78.42184941104965
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/other,mobilenet_v2,0,True,58.50886339937436
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/other,mobilenet_v2,1,True,54.61244351755301
+RQ1 MobileNetV2 has the largest sensitivity drop on mpidb/other,mobilenet_v2,2,True,71.36600625651721
+RQ2 histmatch lowers site_a specificity,mobilenet_v2,0,True,-45.616119865667784
+RQ2 histmatch lowers site_a specificity,mobilenet_v2,1,True,-72.78093515887367
+RQ2 histmatch lowers site_a specificity,mobilenet_v2,2,True,-51.99819168173598
+RQ2 histmatch lowers site_a specificity,resnet50,0,True,-80.68457762851978
+RQ2 histmatch lowers site_a specificity,resnet50,1,True,-74.8333763885301
+RQ2 histmatch lowers site_a specificity,resnet50,2,True,-75.47145440454663
+RQ2 histmatch lowers site_a specificity,vgg16,0,True,-59.626711444071304
+RQ2 histmatch lowers site_a specificity,vgg16,1,True,-74.75587703435805
+RQ2 histmatch lowers site_a specificity,vgg16,2,True,-72.69826918109017
+RQ3 P. falciparum detected less than other species,mobilenet_v2,0,True,-9.966956713294415
+RQ3 rings missed more than trophozoites on site_a,mobilenet_v2,0,True,17.330648557894797
+RQ3 rings missed more than trophozoites on site_b,mobilenet_v2,0,False,-15.09142278373048
+RQ3 P. falciparum detected less than other species,mobilenet_v2,1,False,12.192972794360616
+RQ3 rings missed more than trophozoites on site_a,mobilenet_v2,1,True,3.9817758366364195
+RQ3 rings missed more than trophozoites on site_b,mobilenet_v2,1,False,-3.1824724132416438
+RQ3 P. falciparum detected less than other species,mobilenet_v2,2,True,-7.055843154532434
+RQ3 rings missed more than trophozoites on site_a,mobilenet_v2,2,True,1.60644192249923
+RQ3 rings missed more than trophozoites on site_b,mobilenet_v2,2,False,-3.3637187483341324
+RQ3 P. falciparum detected less than other species,resnet50,0,True,-3.8456878510849215
+RQ3 rings missed more than trophozoites on site_a,resnet50,0,True,13.531383601714719
+RQ3 rings missed more than trophozoites on site_b,resnet50,0,True,8.758462604616458
+RQ3 P. falciparum detected less than other species,resnet50,1,True,-18.791717149465804
+RQ3 rings missed more than trophozoites on site_a,resnet50,1,True,8.12644599966536
+RQ3 rings missed more than trophozoites on site_b,resnet50,1,True,2.2229329921637566
+RQ3 P. falciparum detected less than other species,resnet50,2,True,-20.560634431104752
+RQ3 rings missed more than trophozoites on site_a,resnet50,2,True,19.47212237652629
+RQ3 rings missed more than trophozoites on site_b,resnet50,2,True,12.591289514366434
+RQ3 P. falciparum detected less than other species,vgg16,0,True,-22.636854279105638
+RQ3 rings missed more than trophozoites on site_a,vgg16,0,True,3.89811700312903
+RQ3 rings missed more than trophozoites on site_b,vgg16,0,True,7.612346073884541
+RQ3 P. falciparum detected less than other species,vgg16,1,True,-1.5910342548738798
+RQ3 rings missed more than trophozoites on site_a,vgg16,1,True,3.46982223940273
+RQ3 rings missed more than trophozoites on site_b,vgg16,1,True,6.9673223519377405
+RQ3 P. falciparum detected less than other species,vgg16,2,True,-7.423174358409512
+RQ3 rings missed more than trophozoites on site_a,vgg16,2,True,1.0165990664827997
+RQ3 rings missed more than trophozoites on site_b,vgg16,2,True,5.0162588624127
