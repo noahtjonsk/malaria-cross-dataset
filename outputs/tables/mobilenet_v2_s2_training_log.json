@@ -1,0 +1,158 @@
+{
+ "settings": {
+  "lr": 0.0001,
+  "batch_size": 32,
+  "max_epochs": 20,
+  "patience": 3,
+  "weight_decay": 0.0,
+  "input": 224,
+  "augment": "hflip, vflip, rot90",
+  "threshold": 0.5,
+  "arch": "mobilenet_v2",
+  "seed": 2,
+  "pretrained": true,
+  "smoke": false,
+  "git_commit": "524b38a"
+ },
+ "epoch": 8,
+ "best_val_loss": 0.07635175352207264,
+ "bad_epochs": 3,
+ "history": [
+  {
+   "epoch": 1,
+   "train": {
+    "loss": 0.1313235250490853,
+    "sensitivity": 0.9429254600270298,
+    "specificity": 0.9617070116861436,
+    "accuracy": 0.9522991199291777
+   },
+   "val": {
+    "loss": 0.08762908041791062,
+    "sensitivity": 0.9681710213776722,
+    "specificity": 0.9725036179450073,
+    "accuracy": 0.9703207276208712
+   },
+   "seconds": 89.4,
+   "best": true
+  },
+  {
+   "epoch": 2,
+   "train": {
+    "loss": 0.09736000340844557,
+    "sensitivity": 0.9570641438819004,
+    "specificity": 0.9751669449081803,
+    "accuracy": 0.9660990470239025
+   },
+   "val": {
+    "loss": 0.086730473125135,
+    "sensitivity": 0.9586698337292161,
+    "specificity": 0.9821514712976362,
+    "accuracy": 0.9703207276208712
+   },
+   "seconds": 76.5,
+   "best": true
+  },
+  {
+   "epoch": 3,
+   "train": {
+    "loss": 0.0889214856364541,
+    "sensitivity": 0.9601829712028277,
+    "specificity": 0.9767320534223706,
+    "accuracy": 0.9684424308701766
+   },
+   "val": {
+    "loss": 0.08926338862222938,
+    "sensitivity": 0.9819477434679335,
+    "specificity": 0.9589966232513266,
+    "accuracy": 0.9705600765916707
+   },
+   "seconds": 76.4,
+   "best": false
+  },
+  {
+   "epoch": 4,
+   "train": {
+    "loss": 0.07914700703838003,
+    "sensitivity": 0.9630938767023599,
+    "specificity": 0.9796535893155259,
+    "accuracy": 0.9713586418788731
+   },
+   "val": {
+    "loss": 0.08002592079330711,
+    "sensitivity": 0.9719714964370546,
+    "specificity": 0.9744331886155331,
+    "accuracy": 0.9731929152704644
+   },
+   "seconds": 79.0,
+   "best": true
+  },
+  {
+   "epoch": 5,
+   "train": {
+    "loss": 0.07993411461017172,
+    "sensitivity": 0.9642374467200333,
+    "specificity": 0.9772537562604341,
+    "accuracy": 0.9707337395198666
+   },
+   "val": {
+    "loss": 0.07635175352207264,
+    "sensitivity": 0.9672209026128266,
+    "specificity": 0.9797395079594791,
+    "accuracy": 0.9734322642412637
+   },
+   "seconds": 77.8,
+   "best": true
+  },
+  {
+   "epoch": 6,
+   "train": {
+    "loss": 0.07493359664133897,
+    "sensitivity": 0.965796860380497,
+    "specificity": 0.9801752921535893,
+    "accuracy": 0.972972972972973
+   },
+   "val": {
+    "loss": 0.098613464708189,
+    "sensitivity": 0.9596199524940617,
+    "specificity": 0.9758803666184274,
+    "accuracy": 0.9676878889420776
+   },
+   "seconds": 77.8,
+   "best": false
+  },
+  {
+   "epoch": 7,
+   "train": {
+    "loss": 0.06883705668241587,
+    "sensitivity": 0.9687077658800292,
+    "specificity": 0.981949081803005,
+    "accuracy": 0.975316356819247
+   },
+   "val": {
+    "loss": 0.08519330594016354,
+    "sensitivity": 0.9596199524940617,
+    "specificity": 0.9821514712976362,
+    "accuracy": 0.9707994255624701
+   },
+   "seconds": 77.0,
+   "best": false
+  },
+  {
+   "epoch": 8,
+   "train": {
+    "loss": 0.06602114907335704,
+    "sensitivity": 0.9690196486121219,
+    "specificity": 0.983618530884808,
+    "accuracy": 0.9763057855543404
+   },
+   "val": {
+    "loss": 0.07907157430185434,
+    "sensitivity": 0.9714964370546318,
+    "specificity": 0.9734684032802702,
+    "accuracy": 0.9724748683580661
+   },
+   "seconds": 77.8,
+   "best": false
+  }
+ ]
+}

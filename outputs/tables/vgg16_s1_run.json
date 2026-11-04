@@ -1,0 +1,135 @@
+{
+ "files": {
+  "raw_nih_test.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "bbbc041_cells.csv": "8a71d87184b4",
+    "mpidb_wholecell_cells.csv": "5760b84abdab",
+    "nih_cells.csv": "11b002b7da77",
+    "nih_split.csv": "1f79be27e2ed"
+   },
+   "crops": "0bdb77158823",
+   "n_cells": 4177,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "raw_bbbc041.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "bbbc041_cells.csv": "8a71d87184b4",
+    "mpidb_wholecell_cells.csv": "5760b84abdab",
+    "nih_cells.csv": "11b002b7da77",
+    "nih_split.csv": "1f79be27e2ed"
+   },
+   "crops": "b87cbd284b75",
+   "n_cells": 85486,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "raw_mpidb_wholecell.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "bbbc041_cells.csv": "8a71d87184b4",
+    "mpidb_wholecell_cells.csv": "5760b84abdab",
+    "nih_cells.csv": "11b002b7da77",
+    "nih_split.csv": "1f79be27e2ed"
+   },
+   "crops": "746488c4c385",
+   "n_cells": 1437,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "masked_bbbc041.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "masked_otsu-gray_cells.csv": "a90887c7eb94"
+   },
+   "crops": "603f8d225bb9",
+   "n_cells": 85486,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "masked_mpidb_wholecell.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "masked_otsu-gray_cells.csv": "a90887c7eb94"
+   },
+   "crops": "bae14d9bad57",
+   "n_cells": 1437,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "reinhard_bbbc041.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "colour_reinhard_cells.csv": "c3cbec6a9674"
+   },
+   "crops": "e3f3d823a52d",
+   "n_cells": 85486,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "reinhard_mpidb_wholecell.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "colour_reinhard_cells.csv": "c3cbec6a9674"
+   },
+   "crops": "92dead8413ec",
+   "n_cells": 1437,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "histmatch_bbbc041.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "colour_histmatch_cells.csv": "144ddfdd25b1"
+   },
+   "crops": "0c445b1ce0f6",
+   "n_cells": 85486,
+   "smoke": false,
+   "commit": "524b38a"
+  },
+  "histmatch_mpidb_wholecell.csv": {
+   "checkpoint_sha": "40203d06a558",
+   "best_epoch": 12,
+   "manifests": {
+    "colour_histmatch_cells.csv": "144ddfdd25b1"
+   },
+   "crops": "a20a6d31f904",
+   "n_cells": 1437,
+   "smoke": false,
+   "commit": "524b38a"
+  }
+ },
+ "checkpoint": "vgg16_s1.pt",
+ "settings": {
+  "lr": 0.0001,
+  "batch_size": 32,
+  "max_epochs": 20,
+  "patience": 3,
+  "weight_decay": 0.0,
+  "input": 224,
+  "augment": "hflip, vflip, rot90",
+  "threshold": 0.5,
+  "arch": "vgg16",
+  "seed": 1,
+  "pretrained": true,
+  "smoke": false,
+  "git_commit": "a7cfc4f"
+ },
+ "best_epoch": 12,
+ "val": {
+  "loss": 0.08490121505294992,
+  "sensitivity": 0.9767220902612826,
+  "specificity": 0.9676796912686927,
+  "accuracy": 0.9722355193872666
+ }
+}
