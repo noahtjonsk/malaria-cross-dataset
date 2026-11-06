@@ -98,6 +98,8 @@ python scripts/train.py --arch vgg16 --seed 0 --resume
 python scripts/evaluate.py --checkpoint models/vgg16_s0.pt --variants raw masked reinhard histmatch
 python scripts/summarise_results.py --model vgg16_s0                 # rq1/F1/rq2/rq3 tables + R_ figure
 python scripts/compare_models.py                                     # RQ1: paired differences in drop
+python scripts/aggregate_seeds.py                                    # seeds 0-2 pooled + which findings hold
+python scripts/gradcam.py                                            # appendix: Grad-CAM heat shares (needs models/*_s0.pt)
 # figures for the Methodology Overview (docs/methodology/figures/), the MO as LaTeX/PDF
 # (TinyTeX: pdflatex + biber) and the ELSA report as PDF (needs Microsoft Edge)
 python scripts/make_mo_figures.py
@@ -237,6 +239,16 @@ every RQ, so MP-IDB is evaluated on `mpidb_wholecell` and RQ2's crop-format step
 only removes the background. The trained models stay fixed:
 there is no colour-augmentation arm and no retraining on NIH cells with their
 background.
+
+**A small Grad-CAM check is added as an appendix** (supervisor's suggestion,
+November 2026; the proposal and MO v4 left saliency out of scope).
+`scripts/gradcam.py` maps where each seed-0 model's evidence for "parasitised" sits
+on a fixed random sample of cells, and measures the share of that map inside the
+cell and, for MP-IDB, on the annotated parasite, next to the region's share of the
+image area. It supports the reading of RQ2 and RQ3 but does not replace them: a map
+shows where the evidence is, not what the model relies on, and at 7×7 (14×14 for
+VGG-16) it is too coarse to outline a small ring. A random-weights check (Adebayo
+et al., 2018) tests whether the maps depend on the trained model at all.
 
 ## Data checks behind the method choices
 
