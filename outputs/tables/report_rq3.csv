@@ -1,0 +1,22 @@
+measure,group,arch,n_cells,mean,min,max,finding,seeds_finding_holds
+"Sensitivity, P. falciparum (%)",mpidb/falciparum,vgg16,1297.0,64.68774094063222,57.36314572089437,69.0053970701619,,
+"Sensitivity, P. falciparum (%)",mpidb/falciparum,resnet50,1297.0,44.41017733230532,38.010794140323824,52.582883577486506,,
+"Sensitivity, P. falciparum (%)",mpidb/falciparum,mobilenet_v2,1297.0,34.10434335646363,18.65844255975327,55.050115651503475,,
+"Sensitivity, other species (%)",mpidb/other,vgg16,140.0,75.23809523809524,69.28571428571428,80.0,,
+"Sensitivity, other species (%)",mpidb/other,resnet50,140.0,58.80952380952381,56.42857142857143,61.42857142857143,,
+"Sensitivity, other species (%)",mpidb/other,mobilenet_v2,140.0,35.7142857142857,25.71428571428571,42.85714285714285,,
+"Gap, P. falciparum minus other (pp)",falciparum minus other (pp),vgg16,,-10.55035429746301,-22.63685427910564,-1.5910342548738798,RQ3 P. falciparum detected less than other species,3.0
+"Gap, P. falciparum minus other (pp)",falciparum minus other (pp),resnet50,,-14.399346477218492,-20.560634431104752,-3.8456878510849215,RQ3 P. falciparum detected less than other species,3.0
+"Gap, P. falciparum minus other (pp)",falciparum minus other (pp),mobilenet_v2,,-1.609942357822078,-9.966956713294415,12.192972794360616,RQ3 P. falciparum detected less than other species,2.0
+site_a ring miss rate (%),bbbc041/site_a/ring,vgg16,353.0,5.19357884796977,3.9660056657223697,6.5155807365439,,
+site_a ring miss rate (%),bbbc041/site_a/ring,resnet50,353.0,20.6798866855524,9.3484419263456,30.02832861189802,,
+site_a ring miss rate (%),bbbc041/site_a/ring,mobilenet_v2,353.0,27.101038715769587,22.379603399433428,30.59490084985836,,
+site_a trophozoite miss rate (%),bbbc041/site_a/trophozoite,vgg16,1473.0,2.39873274496492,0.06788866259334,5.4989816700611,RQ3 rings missed more than trophozoites on site_a,3.0
+site_a trophozoite miss rate (%),bbbc041/site_a/trophozoite,resnet50,1473.0,6.969902692916941,1.22199592668024,16.4969450101833,RQ3 rings missed more than trophozoites on site_a,3.0
+site_a trophozoite miss rate (%),bbbc041/site_a/trophozoite,mobilenet_v2,1473.0,19.46141661009277,10.9979633401222,28.98845892735913,RQ3 rings missed more than trophozoites on site_a,3.0
+site_b ring miss rate (%),bbbc041/site_b/ring,vgg16,169.0,11.63708086785009,5.9171597633136,15.976331360946741,,
+site_b ring miss rate (%),bbbc041/site_b/ring,resnet50,169.0,36.68639053254437,31.95266272189349,41.42011834319526,,
+site_b ring miss rate (%),bbbc041/site_b/ring,mobilenet_v2,169.0,60.35502958579882,31.95266272189349,84.02366863905326,,
+site_b trophozoite miss rate (%),bbbc041/site_b/trophozoite,vgg16,111.0,5.1051051051051,0.9009009009009,9.009009009009,RQ3 rings missed more than trophozoites on site_b,3.0
+site_b trophozoite miss rate (%),bbbc041/site_b/trophozoite,resnet50,111.0,28.82882882882883,27.92792792792792,29.72972972972973,RQ3 rings missed more than trophozoites on site_b,3.0
+site_b trophozoite miss rate (%),bbbc041/site_b/trophozoite,mobilenet_v2,111.0,67.56756756756758,35.13513513513513,87.38738738738738,RQ3 rings missed more than trophozoites on site_b,0.0

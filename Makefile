@@ -20,6 +20,8 @@
 #   make tables       rebuild every results table and figure of the seed-0 models
 #                     from their predictions, then the paired model comparison
 #   make eda | rq2-inputs | colab   EDA statistics, RQ2 test crops, Colab archives
+#   make report      pool seeds 0-2 and build the Technical Report's tables and
+#                    figures (report_*), from the committed tables only
 
 PYTHON ?= python
 ARCH ?= mobilenet_v2
@@ -41,7 +43,7 @@ export MALARIA_SAMPLE = 1
 endif
 
 .PHONY: all data split train predict results install selftest log clean-sample \
-        tables eda rq2-inputs colab
+        tables eda rq2-inputs colab report
 
 all: results
 
@@ -107,3 +109,10 @@ rq2-inputs:
 colab: export MALARIA_SAMPLE = 0
 colab:
 	$(PYTHON) scripts/pack_for_colab.py
+
+# Technical Report: needs only outputs/tables/ (no data, no models)
+report: export MALARIA_SAMPLE = 0
+report:
+	$(PYTHON) scripts/aggregate_seeds.py
+	$(PYTHON) scripts/make_report_tables.py
+	$(PYTHON) scripts/make_mo_figures.py --figures pipeline_v4 training_curves
