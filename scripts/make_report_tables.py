@@ -50,9 +50,13 @@ SETS = {"nih_test": "NIH hold-out", "bbbc041/site_a": "BBBC041 site_a",
         "bbbc041/site_b": "BBBC041 site_b", "mpidb/falciparum": "MP-IDB P. falciparum",
         "mpidb/other": "MP-IDB other species"}
 EXTERNAL = [s for s in SETS if s != "nih_test"]
+# shorter labels for the report tables, so their columns fit the page (captions say site_a/b are BBBC041)
+SETS_SHORT = dict(SETS, **{"bbbc041/site_a": "site_a", "bbbc041/site_b": "site_b",
+                           "mpidb/other": "MP-IDB other"})
 METRICS = {"sensitivity": "Sensitivity", "specificity": "Specificity", "auc": "AUC"}
 VARIANT_LABELS = {"raw": "Raw crop", "masked": "Background removed",
                   "reinhard": "+ Reinhard", "histmatch": "+ Histogram matching"}
+VARIANT_SHORT = {"raw": "Raw", "masked": "Masked", "reinhard": "+ Reinhard", "histmatch": "+ Hist. matching"}
 # categorical slots 1-3 of the dataviz palette; validated all-pairs (CVD dE >= 9.2).
 # Slot 3 is below 3:1 contrast, so every figure has a table view (the .md tables).
 COLOURS = {"vgg16": "#2a78d6", "resnet50": "#eb6834", "mobilenet_v2": "#1baf7a"}
@@ -72,7 +76,7 @@ def to_markdown(df: pd.DataFrame) -> str:
     lines = ["| " + " | ".join(cols) + " |", "|" + "|".join("---" for _ in cols) + "|"]
     for _, row in df.iterrows():
         lines.append("| " + " | ".join(str(row[c]) for c in cols) + " |")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines).replace("P. falciparum", "*P. falciparum*") + "\n"   # species in italics
 
 
 def write(name: str, csv: pd.DataFrame, md: pd.DataFrame | None) -> None:
@@ -115,20 +119,30 @@ def model_comparison(rq1: pd.DataFrame, runs: pd.DataFrame) -> pd.DataFrame:
                 r = runs[(runs["test_set"] == test_set) & (runs["metric"] == metric)]
                 winners = r.loc[r.groupby("seed")["drop_pp"].idxmin(), "arch"]
                 k = int((winners == best).sum())
-            line = {"Test set": SETS[test_set], "Metric": METRICS[metric],
-                    "Shown as": ("AUC x100" if metric == "auc" else "value (%)") if nih else "drop (pp)"}
             for arch in ARCHS:
-                cell = fmt(*(scale * sub.loc[arch, f"{col}_{s}"] for s in ("mean", "min", "max")))
-                line[LABELS[arch]] = f"**{cell}**" if arch == best else cell
                 rows.append({"arch": arch, "test_set": test_set, "metric": metric,
                              **{f"{c}_{s}": sub.loc[arch, f"{c}_{s}"]
                                 for c in ("value", "drop_pp") for s in ("mean", "min", "max")},
                              "smallest_mean_drop": arch == best,
                              "seeds_smallest_drop": k if arch == best else np.nan})
-            line["Smallest drop"] = "" if nih else f"{LABELS[best]} ({k}/{len(SEEDS)} seeds)"
-            md.append(line)
     out = pd.DataFrame(rows)
     assert len(out) == len(rq1) == 33, len(out)
+    # one row per test set and model, one column per metric: NIH rows show the value (%),
+    # external rows the drop (pp); bold = smallest mean drop for that set and metric
+    for test_set in SETS:
+        nih = test_set == "nih_test"
+        col, scale = ("value", 100) if nih else ("drop_pp", 1)
+        for i, arch in enumerate(ARCHS):
+            line = {"Test set": SETS_SHORT[test_set] if i == 0 else "", "Model": LABELS[arch]}
+            for metric in METRICS:
+                x = out[(out["test_set"] == test_set) & (out["metric"] == metric) & (out["arch"] == arch)]
+                if x.empty:
+                    line[METRICS[metric]] = "-"
+                    continue
+                x = x.iloc[0]
+                cell = fmt(*(scale * x[f"{col}_{s}"] for s in ("mean", "min", "max")))
+                line[METRICS[metric]] = f"**{cell}**" if x["smallest_mean_drop"] else cell
+            md.append(line)
     write("report_model_comparison", out, pd.DataFrame(md))
     return out
 
@@ -189,21 +203,25 @@ def rq2_table(rq2: pd.DataFrame, runs: pd.DataFrame) -> pd.DataFrame:
     defined = (runs.groupby(["arch", "variant", "test_set", "metric"])["share_recovered_total"]
                .agg(lambda s: int(s.notna().sum())).rename("n_seeds_share_defined"))
     out = rq2.merge(defined.reset_index(), on=["arch", "variant", "test_set", "metric"])
-    md = []
+    md = []   # means only, so the eight columns fit a page; the seed ranges are in the .csv
     for arch in ARCHS:
+        first_set = True
         for test_set in EXTERNAL:
+            first_metric = True
             for metric in METRICS:
                 sub = out[(out["arch"] == arch) & (out["test_set"] == test_set)
                           & (out["metric"] == metric)].set_index("variant")
                 if sub.empty:
                     continue
-                line = {"Model": LABELS[arch], "Test set": SETS[test_set], "Metric": METRICS[metric]}
+                line = {"Model": LABELS[arch] if first_set else "",
+                        "Test set": SETS_SHORT[test_set] if first_metric else "", "Metric": METRICS[metric]}
+                first_set = first_metric = False
                 for v in VARIANTS:
-                    line[VARIANT_LABELS[v]] = fmt(*(sub.loc[v, f"drop_pp_{s}"] for s in ("mean", "min", "max")))
+                    line[VARIANT_SHORT[v]] = f"{sub.loc[v, 'drop_pp_mean']:.1f}"
                 m = sub.loc["masked"]
                 n = int(m["n_seeds_share_defined"])
-                line["Share recovered by masking"] = (
-                    f"{m['share_recovered_total_mean']:.2f} ({n}/{len(SEEDS)} seeds)" if n else "n/a")
+                line["Share recovered (seeds)"] = (
+                    f"{m['share_recovered_total_mean']:.2f} ({n}/{len(SEEDS)})" if n else "n/a")
                 md.append(line)
     assert len(md) == 24, len(md)
     write("report_rq2", out, pd.DataFrame(md))
@@ -215,6 +233,7 @@ def rq3_table(rq3: pd.DataFrame, runs: pd.DataFrame, found: pd.DataFrame) -> Non
     """RQ3 table: species gap and ring vs trophozoite miss rates, with the seed counts that hold."""
     check_pooled(rq3, runs, ["group"], "sensitivity")
     check_pooled(rq3, runs, ["group"], "miss_rate")
+    check_pooled(rq3, runs, ["group"], "share_of_site_misses")
     n = runs.groupby("group")["n_parasitised"].agg(["min", "max"])
     assert (n["min"].fillna(-1) == n["max"].fillna(-1)).all(), "cell counts differ between runs"
     held = found.groupby(["finding", "arch"])["holds"].sum()
@@ -227,9 +246,15 @@ def rq3_table(rq3: pd.DataFrame, runs: pd.DataFrame, found: pd.DataFrame) -> Non
         ("Sensitivity, other species (%)", "mpidb/other", "sensitivity", 100, None),
         ("Gap, P. falciparum minus other (pp)", "falciparum minus other (pp)", "sensitivity", 1,
          "RQ3 P. falciparum detected less than other species"),
+        ("site_a rings, share of all misses (%)", "bbbc041/site_a/ring", "share_of_site_misses", 100, None),
+        ("site_a trophozoites, share of all misses (%)", "bbbc041/site_a/trophozoite",
+         "share_of_site_misses", 100, None),
         ("site_a ring miss rate (%)", "bbbc041/site_a/ring", "miss_rate", 100, None),
         ("site_a trophozoite miss rate (%)", "bbbc041/site_a/trophozoite", "miss_rate", 100,
          "RQ3 rings missed more than trophozoites on site_a"),
+        ("site_b rings, share of all misses (%)", "bbbc041/site_b/ring", "share_of_site_misses", 100, None),
+        ("site_b trophozoites, share of all misses (%)", "bbbc041/site_b/trophozoite",
+         "share_of_site_misses", 100, None),
         ("site_b ring miss rate (%)", "bbbc041/site_b/ring", "miss_rate", 100, None),
         ("site_b trophozoite miss rate (%)", "bbbc041/site_b/trophozoite", "miss_rate", 100,
          "RQ3 rings missed more than trophozoites on site_b"),
@@ -240,7 +265,7 @@ def rq3_table(rq3: pd.DataFrame, runs: pd.DataFrame, found: pd.DataFrame) -> Non
         line = {"Measure": label, "n cells": "" if pd.isna(cells) else f"{int(cells):,}"}
         for arch in ARCHS:
             x = rq3[(rq3["arch"] == arch) & (rq3["group"] == group)].iloc[0]
-            line[LABELS[arch]] = fmt(*(scale * x[f"{col}_{s}"] for s in ("mean", "min", "max")))
+            line[LABELS[arch]] = f"{scale * x[f'{col}_mean']:.1f}"   # mean only; ranges in the .csv
             rows.append({"measure": label, "group": group, "arch": arch, "n_cells": cells,
                          **{s: scale * x[f"{col}_{s}"] for s in ("mean", "min", "max")},
                          "finding": finding or "",

@@ -58,3 +58,4 @@ outputs/sample/*
 
 # Per-cell status of the full background-removal run (8 MB), rebuilt by build_masked_crops.py
 outputs/tables/masked_otsu-gray_status.csv
+!docs/technical_report.pdf

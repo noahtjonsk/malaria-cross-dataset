@@ -1,26 +1,26 @@
-| Model | Test set | Metric | Raw crop | Background removed | + Reinhard | + Histogram matching | Share recovered by masking |
+| Model | Test set | Metric | Raw | Masked | + Reinhard | + Hist. matching | Share recovered (seeds) |
 |---|---|---|---|---|---|---|---|
-| VGG-16 | BBBC041 site_a | Sensitivity | 2.1 [-1.1, 6.0] | -0.3 [-1.2, 1.3] | 34.7 [17.7, 46.2] | -1.7 [-2.1, -1.6] | 0.62 (2/3 seeds) |
-| VGG-16 | BBBC041 site_a | Specificity | 20.1 [13.2, 31.0] | 32.7 [20.0, 43.0] | 13.3 [4.9, 21.7] | 89.2 [85.9, 90.9] | -0.76 (3/3 seeds) |
-| VGG-16 | BBBC041 site_a | AUC | 3.5 [2.5, 4.6] | 3.9 [3.1, 4.3] | 14.2 [12.1, 16.4] | 8.4 [6.7, 10.3] | -0.14 (3/3 seeds) |
-| VGG-16 | BBBC041 site_b | Sensitivity | 7.1 [1.6, 11.2] | 6.9 [1.9, 11.2] | 11.2 [8.2, 16.8] | -1.6 [-2.1, -1.0] | 0.06 (2/3 seeds) |
-| VGG-16 | BBBC041 site_b | Specificity | 1.3 [0.9, 1.5] | 5.6 [0.9, 10.4] | 11.4 [8.0, 16.3] | 94.5 [93.9, 95.5] | n/a |
-| VGG-16 | BBBC041 site_b | AUC | 2.2 [0.8, 3.5] | 3.0 [1.0, 3.9] | 5.9 [5.2, 6.4] | 24.6 [20.8, 26.7] | -0.38 (3/3 seeds) |
-| VGG-16 | MP-IDB P. falciparum | Sensitivity | 33.3 [28.6, 40.9] | 26.3 [26.3, 26.4] | 31.4 [31.2, 31.9] | -1.3 [-1.5, -1.2] | 0.19 (3/3 seeds) |
-| VGG-16 | MP-IDB other species | Sensitivity | 22.7 [18.2, 28.7] | 20.3 [15.4, 27.3] | 34.1 [28.2, 40.9] | -0.4 [-1.8, 0.5] | 0.11 (3/3 seeds) |
-| ResNet-50 | BBBC041 site_a | Sensitivity | 7.0 [-0.5, 17.9] | 0.4 [-1.9, 4.6] | 34.5 [24.1, 54.5] | -2.0 [-2.7, -1.2] | 1.07 (2/3 seeds) |
-| ResNet-50 | BBBC041 site_a | Specificity | 16.5 [11.0, 19.9] | 40.7 [31.8, 54.5] | 20.1 [16.4, 25.4] | 93.5 [91.7, 94.8] | -1.54 (3/3 seeds) |
-| ResNet-50 | BBBC041 site_a | AUC | 5.6 [3.9, 7.6] | 5.9 [3.2, 9.4] | 19.9 [14.6, 25.1] | 21.7 [16.3, 26.9] | -0.01 (3/3 seeds) |
-| ResNet-50 | BBBC041 site_b | Sensitivity | 30.4 [28.0, 33.9] | 17.0 [12.8, 23.6] | 14.9 [11.5, 21.3] | -0.7 [-2.4, 2.2] | 0.43 (3/3 seeds) |
-| ResNet-50 | BBBC041 site_b | Specificity | -0.6 [-1.3, 0.2] | 1.8 [0.0, 5.0] | 9.2 [8.0, 10.9] | 91.5 [83.3, 96.1] | n/a |
-| ResNet-50 | BBBC041 site_b | AUC | 2.9 [2.2, 3.4] | 3.3 [1.9, 4.6] | 6.5 [4.8, 8.0] | 33.9 [27.1, 38.1] | -0.11 (3/3 seeds) |
-| ResNet-50 | MP-IDB P. falciparum | Sensitivity | 52.9 [44.6, 59.6] | 36.0 [33.3, 38.6] | 42.6 [40.9, 45.0] | -1.6 [-2.6, -0.8] | 0.31 (3/3 seeds) |
-| ResNet-50 | MP-IDB other species | Sensitivity | 38.5 [35.6, 40.8] | 22.0 [16.2, 29.4] | 44.7 [35.6, 55.1] | -2.2 [-3.0, -1.7] | 0.43 (3/3 seeds) |
-| MobileNetV2 | BBBC041 site_a | Sensitivity | 21.8 [13.4, 31.9] | 20.2 [12.7, 35.2] | 63.4 [36.0, 81.2] | 2.3 [-0.9, 7.3] | 0.10 (3/3 seeds) |
-| MobileNetV2 | BBBC041 site_a | Specificity | 5.9 [3.2, 8.1] | 18.0 [10.7, 24.1] | 3.9 [1.9, 6.8] | 62.7 [53.8, 79.1] | -2.20 (3/3 seeds) |
-| MobileNetV2 | BBBC041 site_a | AUC | 5.7 [5.1, 6.2] | 11.6 [10.0, 14.0] | 14.1 [10.2, 16.5] | 16.4 [11.1, 20.5] | -1.02 (3/3 seeds) |
-| MobileNetV2 | BBBC041 site_b | Sensitivity | 59.4 [31.1, 80.2] | 50.1 [26.2, 63.7] | 41.4 [28.8, 49.9] | 12.1 [0.4, 19.2] | 0.15 (3/3 seeds) |
-| MobileNetV2 | BBBC041 site_b | Specificity | -1.0 [-1.5, -0.7] | 1.2 [0.4, 2.4] | 0.7 [-0.4, 2.4] | 59.6 [43.1, 79.3] | n/a |
-| MobileNetV2 | BBBC041 site_b | AUC | 8.0 [5.1, 12.3] | 12.5 [5.0, 20.3] | 9.3 [7.1, 12.0] | 26.8 [25.1, 30.2] | -0.50 (3/3 seeds) |
-| MobileNetV2 | MP-IDB P. falciparum | Sensitivity | 63.1 [42.4, 78.4] | 63.1 [39.1, 80.3] | 59.3 [42.2, 71.6] | 4.1 [1.5, 9.1] | 0.01 (3/3 seeds) |
-| MobileNetV2 | MP-IDB other species | Sensitivity | 61.5 [54.6, 71.4] | 60.1 [47.5, 73.5] | 63.4 [51.8, 69.9] | 9.8 [2.5, 18.5] | 0.03 (3/3 seeds) |
+| VGG-16 | site_a | Sensitivity | 2.1 | -0.3 | 34.7 | -1.7 | 0.62 (2/3) |
+|  |  | Specificity | 20.1 | 32.7 | 13.3 | 89.2 | -0.76 (3/3) |
+|  |  | AUC | 3.5 | 3.9 | 14.2 | 8.4 | -0.14 (3/3) |
+|  | site_b | Sensitivity | 7.1 | 6.9 | 11.2 | -1.6 | 0.06 (2/3) |
+|  |  | Specificity | 1.3 | 5.6 | 11.4 | 94.5 | n/a |
+|  |  | AUC | 2.2 | 3.0 | 5.9 | 24.6 | -0.38 (3/3) |
+|  | MP-IDB *P. falciparum* | Sensitivity | 33.3 | 26.3 | 31.4 | -1.3 | 0.19 (3/3) |
+|  | MP-IDB other | Sensitivity | 22.7 | 20.3 | 34.1 | -0.4 | 0.11 (3/3) |
+| ResNet-50 | site_a | Sensitivity | 7.0 | 0.4 | 34.5 | -2.0 | 1.07 (2/3) |
+|  |  | Specificity | 16.5 | 40.7 | 20.1 | 93.5 | -1.54 (3/3) |
+|  |  | AUC | 5.6 | 5.9 | 19.9 | 21.7 | -0.01 (3/3) |
+|  | site_b | Sensitivity | 30.4 | 17.0 | 14.9 | -0.7 | 0.43 (3/3) |
+|  |  | Specificity | -0.6 | 1.8 | 9.2 | 91.5 | n/a |
+|  |  | AUC | 2.9 | 3.3 | 6.5 | 33.9 | -0.11 (3/3) |
+|  | MP-IDB *P. falciparum* | Sensitivity | 52.9 | 36.0 | 42.6 | -1.6 | 0.31 (3/3) |
+|  | MP-IDB other | Sensitivity | 38.5 | 22.0 | 44.7 | -2.2 | 0.43 (3/3) |
+| MobileNetV2 | site_a | Sensitivity | 21.8 | 20.2 | 63.4 | 2.3 | 0.10 (3/3) |
+|  |  | Specificity | 5.9 | 18.0 | 3.9 | 62.7 | -2.20 (3/3) |
+|  |  | AUC | 5.7 | 11.6 | 14.1 | 16.4 | -1.02 (3/3) |
+|  | site_b | Sensitivity | 59.4 | 50.1 | 41.4 | 12.1 | 0.15 (3/3) |
+|  |  | Specificity | -1.0 | 1.2 | 0.7 | 59.6 | n/a |
+|  |  | AUC | 8.0 | 12.5 | 9.3 | 26.8 | -0.50 (3/3) |
+|  | MP-IDB *P. falciparum* | Sensitivity | 63.1 | 63.1 | 59.3 | 4.1 | 0.01 (3/3) |
+|  | MP-IDB other | Sensitivity | 61.5 | 60.1 | 63.4 | 9.8 | 0.03 (3/3) |
