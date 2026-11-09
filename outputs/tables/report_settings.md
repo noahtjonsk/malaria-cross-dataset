@@ -1,11 +1,11 @@
 | Setting | Value |
 |---|---|
-| Learning rate (Adam) | 0.0001 |
-| Batch size | 32 |
-| Maximum epochs | 20 |
-| Early-stopping patience (epochs, NIH validation loss) | 3 |
-| Weight decay | 0.0 |
-| Input size (px) | 224 |
-| Training augmentation | hflip, vflip, rot90 |
-| Decision threshold | 0.5 |
-| ImageNet-pretrained, all layers trained | True |
+| Learning rate (Adam optimiser: step size of each weight update) | 0.0001 |
+| Batch size (images per weight update) | 32 |
+| Maximum epochs (passes over the training data) | 20 |
+| Early stopping: epochs without lower NIH validation error before training stops | 3 |
+| Weight decay (penalty on large weights) | none |
+| Input size (pixels, square) | 224 |
+| Training augmentation | horizontal and vertical flips, rotations by 90° |
+| Decision threshold (output above it = parasitised) | 0.5 |
+| Started from ImageNet weights, all layers trained | yes |

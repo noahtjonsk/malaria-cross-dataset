@@ -123,7 +123,7 @@ Tilburg, The Netherlands
 
 \noindent\spacedlowsmallcaps{Word count}
 
-\vspace{7.5pt}\noindent 2,594
+\vspace{7.5pt}\noindent 2,719
 
 \vspace{15.1pt}
 
@@ -148,15 +148,15 @@ Tilburg, The Netherlands
 
 \section*{Abstract}
 
-Convolutional neural networks (CNNs) that classify red blood cells as malaria-infected score almost perfectly on the public NIH dataset but worse on images from other laboratories. This project measures that drop and tests two suspected causes, crop format and stain colour. VGG-16, ResNet-50 and \mbox{MobileNetV2} were fine-tuned on NIH cells over three seeds and tested without fine-tuning on BBBC041 and MP-IDB. Sensitivity fell by up to 63 percentage points, and the lightest network lost the most. Removing the background or matching stain colour at test time did not restore AUC. The drop is therefore not explained by these two differences, and a new laboratory will likely need recalibration or retraining.
+Convolutional neural networks (CNNs) that classify red blood cells as malaria-infected score almost perfectly on the public NIH dataset but worse on images from other laboratories. This project measures that drop and tests two suspected causes: crop format and stain colour. ImageNet-pretrained VGG-16, ResNet-50 and \mbox{MobileNetV2} were fine-tuned on NIH cells and tested unchanged on the external datasets BBBC041 and MP-IDB. Sensitivity fell by up to 63 percentage points, and the smallest network lost the most. Removing the background or matching stain colour at test time did not improve how well the models rank infected above uninfected cells (AUC). These two differences therefore do not explain the drop.
 
 \section{Introduction}
 
-Malaria caused an estimated 282 million cases and 610,000 deaths in 2024 \citep{who2025}. Diagnosis still relies on a trained microscopist reading a stained blood smear \citep{rajaraman2018}. Software that classifies single cells could support overloaded laboratories, but only if it keeps its accuracy on smears from another laboratory, stain protocol and microscope.
+Malaria caused an estimated 282 million cases and 610,000 deaths in 2024 \citep{who2025}. Diagnosis still relies on a trained microscopist reading a stained blood smear \citep{rajaraman2018}, and many remote areas have limited access to good-quality microscopy \citep{whordt}. Automated cell classification could help, if it stays accurate across laboratories.
 
-The task is binary classification of single red-blood-cell images as parasitised or uninfected. Performance is measured as sensitivity and specificity at a fixed threshold, and the drop is the NIH hold-out value minus the external value. Who is affected by these errors is analysed in the \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report.md}{ELSA report}.
+The task is binary classification of single red-blood-cell images as parasitised or uninfected. Pretrained convolutional neural networks (CNNs) are trained on the NIH dataset and tested on two external datasets, BBBC041 and MP-IDB. The drop is the loss in sensitivity or specificity relative to held-out NIH patients. Stakeholders are analysed in the \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report.md}{ELSA report}.
 
-\textbf{MRQ.} To what extent do CNNs trained to classify NIH single-cell images as parasitised or uninfected lose sensitivity on BBBC041 and MP-IDB, and specificity on BBBC041, relative to a patient-grouped NIH hold-out set, and which dataset differences explain this drop?
+\textbf{MRQ.} To what extent do pretrained CNNs trained to classify NIH single-cell images as parasitised or uninfected lose sensitivity on BBBC041 and MP-IDB, and specificity on BBBC041, relative to a patient-grouped NIH hold-out set, and which dataset differences explain this drop?
 
 \textbf{RQ1.} How large is the drop from the patient-grouped NIH hold-out set, in percentage points, for \mbox{MobileNetV2}, ResNet-50 and VGG-16 applied without fine-tuning to BBBC041 and MP-IDB, and does the lighter architecture lose less than the heavier ones?
 
@@ -164,45 +164,51 @@ The task is binary classification of single red-blood-cell images as parasitised
 
 \textbf{RQ3.} Does sensitivity on the pooled different-species MP-IDB cells (\emph{n} = 140) differ from \emph{P. falciparum} (\emph{n} = 1,297) by more than the resampling interval, and which BBBC041 life stages account for the largest share of missed parasites?
 
-Section 2 summarises the literature, Section 3 the method, Section 4 the results and Section 5 the conclusions.
+Sections 2 to 5 cover the literature, method, results and conclusions.
 
 \section{Literature review}
 
-On NIH, \citet{rajaraman2018} reached 98.6\% accuracy with a cell-level split but 95.9\% when patients were kept apart, so random splits inflate the in-domain baseline. \citet{zhao2020} tested an NIH-trained VGG-16 on BBBC041, where its AUC fell from 0.994 to 0.945. \citet{loddo2022} found light and heavy CNNs similar within NIH, yet NIH-trained models averaged only 60.61\% when separating rings from later stages on MP-IDB. \citet{hou2026}, the state of the art and the protocol adopted here, used a patient-grouped split; their compact model kept 96.4\% sensitivity on BBBC041 but reached only 18.0\% specificity. \citet{xu2025} showed that stain normalisation of malaria smears depends strongly on the method: cross-platform stage accuracy was 29.34\% after Reinhard transfer and 48.66\% with their learned BeerLaNet.
+On NIH itself, \citet{rajaraman2018} reached 98.6\% accuracy when cells were split at random but 95.9\% when patients were kept apart, so random splits inflate the baseline. \citet{zhao2020} tested an NIH-trained VGG-16 on BBBC041, where its AUC fell from 0.994 to 0.945. \citet{loddo2022} found light and heavy CNNs similar within NIH, yet NIH-trained models averaged only 60.61\% when separating rings, the earliest parasite stage, from later stages on MP-IDB. \citet{hou2026}, the state of the art and the protocol adopted here, split NIH by patient and tested on external datasets; their compact model kept 96.4\% sensitivity on BBBC041 but reached only 18.0\% specificity. \citet{xu2025} showed that colour normalisation of malaria smears depends strongly on the method: accuracy at classifying parasite stages across imaging platforms was 29.34\% after Reinhard colour transfer and 48.66\% with BeerLaNet, their learned stain-normalisation network.
 
-Three gaps follow. First, the drop has been reported at different operating points and for different models, so its size and its dependence on architecture are unclear. Second, crop format (NIH cells segmented onto black, external cells cut as rectangles with background) and stain colour are named as suspected causes \citep{zhao2020,loddo2022,hou2026}, but no study changes one of them while keeping the model fixed. Third, none reports how much of the drop such a change recovers. This project addresses all three with three architectures under one protocol and a stepwise test-time ablation. The full review is in \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/LiteratureReview_NoahTjonSienKie.pdf}{\texttt{LiteratureReview\_\allowbreak{}NoahTjonSienKie.\allowbreak{}pdf}}.
+Three gaps follow. First, the drop has been reported with different metrics and decision thresholds and for different models, so its size and its dependence on architecture are unclear. Second, crop format (NIH cells cut out onto black, external cells cut as rectangles with background) and stain colour are named as suspected causes \citep{zhao2020,loddo2022,hou2026}, but no study changes one of them while keeping the model fixed. Third, none reports how much of the drop such a change recovers. This project addresses all three: three architectures under one protocol, and test images edited one difference at a time while the models stay fixed.
 
 \section{Methodology}
 
-Figure 1 shows the pipeline. Implementation details are in the \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/methodology_overview_v4.md}{Methodology Overview} (MO), cited by section below.
+Figure 1 shows the pipeline; sections of the Methodology Overview (MO) in the repository document each step.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{figures/pipeline_v4.png}
-\caption{Pipeline. Letters match the stages in the Methodology Overview, and each box names the script that implements it. Drawn by \texttt{scripts/\allowbreak{}make\_\allowbreak{}mo\_\allowbreak{}figures.\allowbreak{}py}.}
+\caption{Pipeline. F1 and F2 are the two RQ2 steps; each box names the script that implements it. Drawn by \texttt{scripts/\allowbreak{}make\_\allowbreak{}mo\_\allowbreak{}figures.\allowbreak{}py}.}
 \end{figure}
 
 \subsection{Data}
 
-NIH cell\_images \citep{rajaraman2018} holds 27,558 crops of \emph{P. falciparum}-infected and uninfected cells from 200 patients, segmented along the cell outline and placed on black. It was split 70/15/15 by patient (19,203, 4,178 and 4,177 cells), so no patient's slide appears in two splits, and the hold-out set is the in-distribution reference (MO \S{}3.2). BBBC041 \citep{ljosa2012} contains \emph{P. vivax} smears from two acquisition batches, kept apart as site\_a (79,569 cells, 2.7\% parasitised) and site\_b (5,917 cells, 5.1\%); its cells were cut as squares around the annotated boxes, padded by 10\%, and its 446 ``difficult'' cells and 103 leukocytes were excluded (MO \S{}3.1). MP-IDB \citep{loddo2019} annotates only parasites, so it has no uninfected cells; each of its 1,437 parasites was recropped on its host red cell and grouped into \emph{P. falciparum} (1,297) and the other three species (140). The exploratory analysis (MO \S{}4) found two systematic differences: NIH crops are a median 26\% black padding while no test crop has any, and BBBC041 cells absorb three to four times as much methyl-blue stain.
+The training data are the NIH cell images, from the US National Library of Medicine \citep{rajaraman2018}: 27,558 red blood cells from 200 patients in Chittagong, Bangladesh, half infected with the parasite \emph{Plasmodium falciparum}, each cut out along its outline and placed on a black square. They were split 70/15/15 by patient, so no model is tested on a patient it was trained on; the 30 hold-out patients, never used in training, give the reference performance (MO \S{}3.2).
+
+Two external datasets are used for testing only. BBBC041 \citep{ljosa2012} contains \emph{P. vivax} smears photographed in two batches, kept apart as site\_a (79,569 cells, 2.7\% parasitised) and site\_b (5,917 cells, 5.1\%). Ambiguous cells (446, marked ``difficult'') and white blood cells (103) were excluded. MP-IDB \citep{loddo2019} marks only parasites, so it has no uninfected cells. Each of its 1,437 parasites was cropped around the red cell containing it, like NIH's whole-cell crops, and grouped into \emph{P. falciparum} (1,297) and three other species (140) (MO \S{}3.1). Exploratory analysis (MO \S{}4) found that a median 26\% of each NIH crop is black frame, whereas test crops show background and neighbouring cells, and that BBBC041 cells carry three to four times more blue stain.
 
 \subsection{Models and training}
 
-VGG-16 (134.3 M parameters), ResNet-50 (23.5 M) and \mbox{MobileNetV2} (2.2 M) were fine-tuned from ImageNet weights \citep{simonyan2015,he2016,sandler2018}. They are common in the malaria literature and span a sixty-fold range in size, which RQ1 needs. All layers were trained, because stained blood cells look nothing like ImageNet photographs. Each network got a single output and identical settings: Adam at a learning rate of 10\textsuperscript{\textminus{}4}, batch size 32, flips and 90\textdegree{} rotations as augmentation, and early stopping on NIH validation loss (MO \S{}5.1, Appendix Table A4). Colour augmentation was left out, so that RQ2's colour step has something to recover, and hyperparameters were fixed instead of tuned per model, so that RQ1 compares architectures and not tuning budgets (MO \S{}5.3). Each architecture was trained with seeds 0, 1 and 2 on a Colab T4 GPU (\href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/train.py}{\texttt{scripts/\allowbreak{}train.\allowbreak{}py}}, \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/run_seeds_colab.sh}{\texttt{scripts/\allowbreak{}run\_\allowbreak{}seeds\_\allowbreak{}colab.\allowbreak{}sh}}).
+Three CNNs pretrained on ImageNet, 1.2 million labelled photographs \citep{russakovsky2015}, were used: \mbox{MobileNetV2} \citep{sandler2018}, ResNet-50 \citep{he2016} and VGG-16 \citep{simonyan2015}, with 2.2, 23.5 and 134.3 million parameters (learned weights). VGG-16 is about sixty times larger than \mbox{MobileNetV2}. Each network's last layer was replaced by one output, the probability that the cell is parasitised, and all layers were fine-tuned (trained further on NIH), because features learned from everyday photographs do not fit stained cells. All three used the same settings (Appendix Table A4): flips and 90\textdegree{} rotations as augmentation, and early stopping, which ends training when the error on NIH validation patients stops falling and keeps the best model so far. Hyperparameters (training settings) were fixed, not tuned per model, so RQ1 compares architectures rather than tuning budgets. Random colour changes were left out on purpose: they teach a model to ignore colour, and RQ2 could then not show how much colour matters. Training is random, so each architecture was trained three times (seeds 0, 1 and 2; MO \S{}5.1, \S{}5.3).
 
 \subsection{Test-time ablation (RQ2)}
 
-RQ2 edits the test crops and never the models. Step F1 removes the background: each test crop is thresholded on brightness with Otsu's method \citep{otsu1979}, everything outside the cell is set to black and the crop is cut to the cell, as NIH crops were made. Otsu matched the hand-drawn NIH outlines best of the methods tried (median Dice 0.90; MO \S{}5.2). Step F2 then matches stain colour to NIH, either by Reinhard transfer of per-cell Lab statistics \citep{reinhard2001} or by histogram matching of each RGB channel, with a reference from 1,000 NIH training cells. Because the models and the cells stay fixed, any change in performance can be attributed to the step.
+RQ2 edits only the test images, so any change in the fixed models' performance comes from the edit. Step F1 removes the background with Otsu's method \citep{otsu1979}, which picks the brightness threshold that best separates cell from surroundings: everything outside the cell becomes black, as in NIH crops. Its masks matched hand-drawn NIH outlines with a median Dice overlap of 0.90 (1 is perfect), while the neural model U\textsuperscript{2}-Net found no cell in 21\% of NIH crops (MO \S{}5.2). Step F2 then matches stain colour to NIH in two separate variants: Reinhard transfer \citep{reinhard2001} matches the mean and spread of each cell's colour channels to NIH, and histogram matching maps each colour channel's whole distribution onto NIH's (reference: 1,000 NIH training cells; Figure 2).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{figures/rq2_variants.png}
+\caption{The same test cells as the models see them: raw crop, background removed, and the two colour variants. Visible artefacts: Otsu keeps a touching neighbour cell (rows 1 and 3), very dark site\_a pixels are taken for background (row 1), and histogram matching amplifies the noise of grey site\_b cells (row 2). Drawn by \texttt{scripts/\allowbreak{}make\_\allowbreak{}mo\_\allowbreak{}figures.\allowbreak{}py}.}
+\end{figure}
 
 \subsection{Evaluation}
 
-Sensitivity and specificity at a threshold of 0.5, fixed before testing, are the primary measures, because BBBC041 is only 2.7 to 5.1\% parasitised: calling every site\_a cell uninfected would score 97.3\% accuracy. Specificity is measured on NIH and BBBC041 only. AUC is a threshold-free check on how well the scores rank parasitised above uninfected cells, and F1 is secondary (MO \S{}5.5).
+Sensitivity is the share of parasitised cells called parasitised (output above 0.5, a threshold fixed before testing), and specificity the share of uninfected cells called uninfected; drops are in percentage points (pp). They are the primary measures because BBBC041 is only 2.7 to 5.1\% parasitised, so calling every site\_a cell uninfected would score 97.3\% accuracy. AUC, the probability that a random parasitised cell scores above a random uninfected one, checks ranking without a threshold. F1 is secondary: it includes precision, the share of parasitised calls that are correct, which falls when infected cells are rare (49.2\% of NIH hold-out cells, 2.7\% of site\_a), so an F1 drop would mix model failure with prevalence (MO \S{}5.5).
 
-\emph{Share recovered} is specific to this project. For a step, it is the value after the step minus the raw value, divided by the raw drop: 1 means the step closes the whole drop, 0 that it changes nothing, and a negative value that it widens the drop. It is computed only when the raw drop's 95\% interval lies above zero, since dividing by a drop near zero gives meaningless values. Because sensitivity also rises when a model simply calls more cells parasitised, every share is read together with specificity and AUC for the same step.
+\emph{Share recovered} is specific to this project: the value after a step minus the raw value, divided by the raw drop. 1 means the step closes the drop, 0 that it changes nothing, and a negative value that it widens the drop. It is computed only when the raw drop's 95\% interval lies above zero, since dividing by a drop near zero gives meaningless values. Because sensitivity also rises when a model simply calls more cells parasitised, every share is read with specificity and AUC.
 
-Uncertainty has two sources. Within a run, 95\% intervals come from 2,000 bootstrap resamples of whole photographs, and of patients for NIH, because cells from one photograph share its stain and focus. Across runs, results are the mean over three seeds with the lowest and highest seed in brackets. Differences in drop between models are tested with a paired bootstrap and a Bonferroni correction over 24 comparisons (MO \S{}5.5). A finding counts as stable only if it holds in all three seeds. The NIH hold-out patients are used once, after training, and the external sets never inform training, early stopping, the colour reference or the threshold, so both are true out-of-sample tests (MO \S{}5.5). The tables are built by \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/summarise_results.py}{\texttt{scripts/\allowbreak{}summarise\_\allowbreak{}results.\allowbreak{}py}}, \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/compare_models.py}{\texttt{compare\_\allowbreak{}models.\allowbreak{}py}}, \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/aggregate_seeds.py}{\texttt{aggregate\_\allowbreak{}seeds.\allowbreak{}py}} and \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/scripts/make_report_tables.py}{\texttt{make\_\allowbreak{}report\_\allowbreak{}tables.\allowbreak{}py}} (\texttt{make report}).
-
-Retraining on target images and colour augmentation were rejected: both change the model and need target labels, so they would answer a different question (MO \S{}5.7).
+Each value has a 95\% interval from a bootstrap: the test set is redrawn 2,000 times with replacement and the middle 95\% of the recomputed values kept. Whole photographs are redrawn, not cells, because cells from one photograph share its stain and focus; NIH is redrawn by patient. Training randomness is shown as the mean over three seeds with the lowest and highest seed in brackets. A finding counts as stable only if it holds in all three seeds. Models are compared on the same redrawn sets (a paired bootstrap), so luck in the draw cancels from their difference. With 24 such comparisons, about one would look real by chance at 95\%, so a Bonferroni correction widens each interval to 99.8\%. This replaces t-tests, which assume independent cells. The external sets never inform training, early stopping, the colour reference or the threshold.
 
 \section{Results, interpretation and discussion}
 
@@ -236,7 +242,7 @@ MP-IDB other & VGG-16 & \textbf{22.7~[18.2,~28.7]} & - & - \\*
  & \mbox{MobileNetV2} & 61.5~[54.6,~71.4] & - & - \\*
 \end{longtable}}
 
-On the NIH hold-out the three models are close: sensitivity 97.2 to 98.0\%, specificity 97.0 to 98.1\% and AUC 0.996 (Table 1). Every external set lowers performance, but by how much depends on the model and the metric (Figure 2). VGG-16 loses the least sensitivity: 7.1 pp on site\_b against 30.4 for ResNet-50 and 59.4 for \mbox{MobileNetV2}, and 33.3 and 22.7 pp on the two MP-IDB groups against 63.1 and 61.5 for \mbox{MobileNetV2}. \mbox{MobileNetV2} never had the smallest sensitivity drop on any set in any seed, but it kept the most specificity on site\_a in every seed (drop 5.9 pp against 20.1 for VGG-16). The answer to the second half of RQ1 is therefore no: the lighter architecture does not lose less. It calls fewer external cells parasitised, which trades missed parasites for fewer false alarms. This was not the expected outcome: a small network might have fitted less NIH-specific detail and transferred better, but the larger networks transferred their sensitivity better. The AUC drops (2.2 to 8.0 pp) are much smaller than the sensitivity drops, so much of the loss is a shift of the scores relative to the fixed threshold rather than a loss of ranking; \mbox{MobileNetV2}, with the largest AUC drop on site\_b (8.0 pp), also ranks cells worse.
+On the NIH hold-out the three models are close: sensitivity 97.2 to 98.0\%, specificity 97.0 to 98.1\% and AUC 0.996 (Table 1). Every external set lowers performance, but by how much depends on the model and the metric (Figure 3). VGG-16 loses the least sensitivity: 7.1 pp on site\_b against 30.4 for ResNet-50 and 59.4 for \mbox{MobileNetV2}, and 33.3 and 22.7 pp on the two MP-IDB groups against 63.1 and 61.5 for \mbox{MobileNetV2}. \mbox{MobileNetV2} never had the smallest sensitivity drop on any set in any seed, but it kept the most specificity on site\_a in every seed (drop 5.9 pp against 20.1 for VGG-16). The answer to the second half of RQ1 is therefore no: the lighter architecture does not lose less. It calls fewer external cells parasitised, which trades missed parasites for fewer false alarms. This was not expected: a small network might fit less NIH-specific detail, but the larger networks kept their sensitivity better. The AUC drops (2.2 to 8.0 pp) are much smaller than the sensitivity drops, so much of the loss is a shift of the scores relative to the fixed threshold rather than a loss of ranking; \mbox{MobileNetV2}, with the largest AUC drop on site\_b (8.0 pp), also ranks cells worse.
 
 \begin{figure}[H]
 \centering
@@ -266,11 +272,11 @@ MP-IDB \emph{P. falciparum} & 64.7~/~- & 44.4~/~- & 34.1~/~- \\*
 MP-IDB other species & 75.2~/~- & 58.8~/~- & 35.7~/~- \\*
 \end{longtable}}
 
-Training, validation and hold-out values differ by at most 1.2 pp for every architecture (Table 2), and early stopping kept epochs 5 to 12 (Appendix Table A3). The models did not overfit the NIH training patients; the failure appears only out of distribution, where the same models fall to 34 to 75\% sensitivity on MP-IDB. A patient-grouped hold-out set therefore says little about another laboratory.
+Training, validation and hold-out values differ by at most 1.2 pp for every architecture (Table 2), and early stopping kept the model after 5 to 12 epochs, i.e. passes over the training data (Appendix Table A3). The models did not overfit the NIH training patients; the failure appears only on other laboratories' images, where the same models fall to 34 to 75\% sensitivity on MP-IDB. A patient-grouped hold-out set therefore says little about another laboratory.
 
 \subsection{RQ2: matching crop format and stain colour}
 
-Removing the background recovered part of the sensitivity drop for VGG-16 and ResNet-50, for example a share of 0.31 for ResNet-50 on MP-IDB \emph{P. falciparum} and 0.43 on site\_b (Appendix Table A1). It also lowered site\_a specificity for all three models, and AUC improved for no model on either BBBC041 site (Figure 3). A likely reason is two known artefacts of the masks: Otsu sometimes keeps a touching neighbour with the cell, and very dark site\_a pixels fall below the black level and become padding (MO \S{}5.2), so some uninfected cells end up with dark, parasite-like fragments on black.  Reinhard transfer then lowered site\_a sensitivity by a further 34 to 43 pp, while histogram matching raised sensitivity to 85 to 100\% by calling almost every cell parasitised: site\_a specificity fell to 4.5 to 35.3\%. Its apparent recovery of 85 to 106\% of the MP-IDB drops is therefore not a gain, which is why share recovered has to be read with specificity and AUC. The answer to RQ2 is that little or none of the drop is recovered when ranking is the criterion: matching crop format and colour at test time moves scores across the threshold but does not help the models separate parasitised from uninfected cells.
+Removing the background recovered part of the sensitivity drop for VGG-16 and ResNet-50, for example a share of 0.31 for ResNet-50 on MP-IDB \emph{P. falciparum} and 0.43 on site\_b (Appendix Table A1). It also lowered site\_a specificity for all three models, and AUC improved for no model on either BBBC041 site (Figure 4). A likely reason is two known artefacts of the masks: Otsu sometimes keeps a touching neighbour with the cell, and very dark site\_a pixels are taken for background (Figure 2), so some uninfected cells end up with dark, parasite-like fragments on black.  Reinhard transfer then lowered site\_a sensitivity by a further 34 to 43 pp, while histogram matching raised sensitivity to 85 to 100\% by calling almost every cell parasitised: site\_a specificity fell to 4.5 to 35.3\%. Its apparent recovery of 85 to 106\% of the MP-IDB drops is therefore not a gain. The answer to RQ2 is that little or none of the drop is recovered when ranking is the criterion: matching crop format and colour at test time moves scores across the threshold but does not help the models separate parasitised from uninfected cells.
 
 \begin{figure}[H]
 \centering
@@ -280,7 +286,7 @@ Removing the background recovered part of the sensitivity drop for VGG-16 and Re
 
 \subsection{RQ3: species and life stages}
 
-\emph{P. falciparum}, the training species, was detected less often than the other species in 8 of 9 runs (Appendix Table A2). The mean gap is \textminus{}10.6 pp for VGG-16 and \textminus{}14.4 pp for ResNet-50, while \mbox{MobileNetV2}'s gap changes sign between seeds. Rings account for the largest share of missed parasites on site\_b for all three models (54 to 74\%) and on site\_a for VGG-16 and ResNet-50; for \mbox{MobileNetV2} on site\_a, trophozoites, the most numerous stage, account for 53\%. Rings were also missed at a higher rate than trophozoites on site\_a in 9 of 9 runs and on site\_b in 6 of 9. Rings are small and faint, and 95\% of MP-IDB \emph{P. falciparum} parasites are rings, which plausibly explains why the training species is detected worst. A Grad-CAM check \citep{selvaraju2017} of the seed-0 models (Appendix Figure 4) found that the parasite received 33 to 72\% of the evidence while covering 11 to 27\% of the crop, for missed cells as much as for detected ones. The models look in the right place but do not recognise the parasite's appearance.
+\emph{P. falciparum}, the training species, was detected less often than the other species in 8 of 9 runs (Appendix Table A2). The mean gap is \textminus{}10.6 pp for VGG-16 and \textminus{}14.4 pp for ResNet-50, while \mbox{MobileNetV2}'s gap changes sign between seeds. Rings account for the largest share of missed parasites on site\_b for all three models (54 to 74\%) and on site\_a for VGG-16 and ResNet-50; for \mbox{MobileNetV2} on site\_a, trophozoites (the next, larger stage) account for 53\%. Rings were also missed at a higher rate than trophozoites on site\_a in 9 of 9 runs and on site\_b in 6 of 9. Rings are small and faint, and 95\% of MP-IDB \emph{P. falciparum} parasites are rings, which plausibly explains why the training species is detected worst. Grad-CAM \citep{selvaraju2017} shows which image regions drive a prediction; applied to the first training run of each model (Appendix Figure 5), it found that the parasite received 33 to 72\% of the evidence while covering 11 to 27\% of the crop, for missed cells as much as for detected ones. The models look in the right place but do not recognise the parasite's appearance.
 
 \subsection{Comparison with the literature and across seeds}
 
@@ -290,7 +296,7 @@ Seed variation is small on NIH and large on the external sets: the NIH values va
 
 \subsection{Strengths and weaknesses}
 
-The design makes the comparisons fair: one patient-grouped split, identical settings for every architecture, the same cells and threshold for every model and test input, paired intervals that resample whole photographs, and three seeds. Every table in this report is rebuilt from committed results by \texttt{make report}, so the numbers can be checked without a GPU. The weaknesses limit how far the conclusions reach. Corrections are applied only at test time, so the study cannot say whether training with colour augmentation or on masked cells would remove the drop. The fixed threshold of 0.5 mixes ranking errors with calibration errors, which the AUC only partly separates. The other-species group has only 140 cells, and the Grad-CAM check covers the seed-0 models and 100 cells per group.
+The comparisons are fair by design: one split, identical settings, the same cells and threshold for every model and test input, paired intervals and three seeds. Every table can be rebuilt with one command, without a GPU. The weaknesses limit how far the conclusions reach. Corrections are applied only at test time, so the study cannot say whether training with colour augmentation, on masked cells or on labelled target images would remove the drop; these change the model, which RQ2 holds fixed. The fixed threshold of 0.5 mixes errors in ranking with errors in where the threshold sits, which the AUC only partly separates. The other-species group has only 140 cells, and the Grad-CAM check covers only the first training run and 100 cells per group.
 
 \section{Conclusion, limitations and future work}
 
@@ -387,7 +393,7 @@ ResNet-50 & 23.5 & 9,~10,~8 & 6,~7,~5 & 1.8 & 16~[15,~17] \\*
 \end{longtable}}
 
 {\small
-\begin{longtable}{@{}>{\raggedright\arraybackslash}p{245.9pt}>{\raggedright\arraybackslash}p{90.1pt}@{}}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{204.0pt}>{\raggedright\arraybackslash}p{132.0pt}@{}}
 \toprule
 Setting & Value \\
 \midrule
@@ -397,21 +403,21 @@ Setting & Value \\
 \bottomrule
 \caption{Training settings, identical for all nine runs (read from the training logs).}
 \endlastfoot
-Learning rate (Adam) & 0.0001 \\*
-Batch size & 32 \\*
-Maximum epochs & 20 \\*
-Early-stopping patience (epochs, NIH validation loss) & 3 \\*
-Weight decay & 0.0 \\*
-Input size (px) & 224 \\*
-Training augmentation & hflip, vflip, rot90 \\*
-Decision threshold & 0.5 \\*
-ImageNet-pretrained, all layers trained & True \\*
+Learning rate (Adam optimiser: step size of each weight update) & 0.0001 \\*
+Batch size (images per weight update) & 32 \\*
+Maximum epochs (passes over the training data) & 20 \\*
+Early stopping: epochs without lower NIH validation error before training stops & 3 \\*
+Weight decay (penalty on large weights) & none \\*
+Input size (pixels, square) & 224 \\*
+Training augmentation & horizontal and vertical flips, rotations by 90\textdegree{} \\*
+Decision threshold (output above it = parasitised) & 0.5 \\*
+Started from ImageNet weights, all layers trained & yes \\*
 \end{longtable}}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth,height=0.66\textheight,keepaspectratio]{../../outputs/figures/gradcam_examples.png}
-\caption{Grad-CAM maps of the seed-0 models on example cells \citep{selvaraju2017}, drawn by \texttt{scripts/\allowbreak{}gradcam.\allowbreak{}py}.}
+\caption{Grad-CAM maps of the first training run (seed 0) of each model on example cells \citep{selvaraju2017}: yellow marks the regions that most raise the predicted probability of parasitised. Drawn by \texttt{scripts/\allowbreak{}gradcam.\allowbreak{}py}.}
 \end{figure}
 
 \end{document}

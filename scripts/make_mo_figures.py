@@ -136,7 +136,7 @@ STAGES_V4 = [
     ("Models (RQ1) and test inputs (RQ2) (E, F)", [
         ("E", "Fine-tune on NIH", "VGG-16, ResNet-50,\nMobileNetV2, seeds 0-2;\nall layers, early stop\ntrain.py", False),
         ("F1", "Background removed", "Otsu on brightness,\ntest crops only\nbuild_masked_crops.py", False, False),
-        ("F2", "Colour matched", "Reinhard or\nhistogram matching\nbuild_colour_crops.py", False)]),
+        ("F2", "Colour matched", "two variants, each\non F1 crops: Reinhard;\nhistogram matching\nbuild_colour_crops.py", False)]),
     ("Scoring and evaluation (G, H; appendix I)", [
         ("G", "Inference", "frozen weights; 9 runs\nx 4 test inputs, 0.5\nthreshold; evaluate.py", False),
         ("H1", "Metrics", "per run: RQ1-RQ3,\ndrop, share recovered,\n95% CIs\nsummarise_results.py", False),

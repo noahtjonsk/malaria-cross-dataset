@@ -314,13 +314,23 @@ def compute_table() -> None:
                                               x["train_minutes"].max(), 0)})
     write("report_compute", t, pd.DataFrame(md))
     assert not settings["smoke"] and settings["pretrained"]
-    names = {"lr": "Learning rate (Adam)", "batch_size": "Batch size", "max_epochs": "Maximum epochs",
-             "patience": "Early-stopping patience (epochs, NIH validation loss)",
-             "weight_decay": "Weight decay", "input": "Input size (px)",
-             "augment": "Training augmentation", "threshold": "Decision threshold",
-             "pretrained": "ImageNet-pretrained, all layers trained"}
+    names = {"lr": "Learning rate (Adam optimiser: step size of each weight update)",
+             "batch_size": "Batch size (images per weight update)",
+             "max_epochs": "Maximum epochs (passes over the training data)",
+             "patience": "Early stopping: epochs without lower NIH validation error before training stops",
+             "weight_decay": "Weight decay (penalty on large weights)",
+             "input": "Input size (pixels, square)",
+             "augment": "Training augmentation", "threshold": "Decision threshold (output above it = parasitised)",
+             "pretrained": "Started from ImageNet weights, all layers trained"}
+    readable = {"hflip, vflip, rot90": "horizontal and vertical flips, rotations by 90°",
+                True: "yes", False: "no", 0.0: "none"}
     assert set(names) <= set(settings), set(names) - set(settings)
-    md = pd.DataFrame([{"Setting": names[k], "Value": str(settings[k])} for k in names])
+    assert settings["augment"] in readable, settings["augment"]
+    md = pd.DataFrame([{"Setting": names[k],
+                        "Value": readable.get(settings[k], str(settings[k]))
+                        if not isinstance(settings[k], (int, float)) or isinstance(settings[k], bool)
+                        or settings[k] == 0.0 else str(settings[k])}
+                       for k in names])
     (paths.TABLES / "report_settings.md").write_text(to_markdown(md), encoding="utf-8", newline="\n")
     print("wrote report_settings.md")
 
