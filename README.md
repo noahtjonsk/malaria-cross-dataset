@@ -114,8 +114,11 @@ v4 is v3 with its links pointing at the capstone GitLab repository and the data 
 described; v3 ([`docs/methodology_overview_v3.md`](docs/methodology_overview_v3.md), PDF
 alongside) links to GitHub. The earlier Markdown version is
 [`docs/methodology_overview.md`](docs/methodology_overview.md).
-The ELSA report (D5: the final commented checklist, mitigations and panel-review reflections) is
-[`docs/elsa_report.md`](docs/elsa_report.md); the earlier working checklist is
+The ELSA report (D5) is [`docs/elsa_report_v3.md`](docs/elsa_report_v3.md) (PDF in the Technical
+Report's LaTeX layout: [`docs/elsa_report_v3.pdf`](docs/elsa_report_v3.pdf), source
+[`docs/methodology/elsa_report_v3.tex`](docs/methodology/elsa_report_v3.tex)). Earlier versions are
+[`docs/elsa_report_v2.md`](docs/elsa_report_v2.md) and [`docs/elsa_report.md`](docs/elsa_report.md)
+(the October commented checklist with mitigations); the earlier working checklist is
 [`docs/elsa_checklist.md`](docs/elsa_checklist.md).
 
 ## Where to look at the cells

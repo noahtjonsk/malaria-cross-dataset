@@ -5,7 +5,8 @@ This is the living ELSA checklist for D5 (the ELSA worksheet). **Part A** takes 
 `python -m deon -o checklist.md` (deon 0.3.0), and adds project-specific items marked
 **+**. **Part B** gives a mitigation for each item marked (Part B). The final,
 commented version of this checklist, with mitigations and the panel-review
-reflections, is [`docs/elsa_report.md`](elsa_report.md).
+reflections, is [`docs/elsa_report_v3.md`](elsa_report_v3.md) (earlier versions:
+[`docs/elsa_report.md`](elsa_report.md), [`docs/elsa_report_v2.md`](elsa_report_v2.md)).
 
 ## Part A: checklist
 
