@@ -95,7 +95,7 @@
 
 \noindent\spacedlowsmallcaps{Panel}
 
-\vspace{7.5pt}\noindent to be confirmed
+\vspace{7.5pt}\noindent Dr. Sharon Ong, Dr. Juan Sebastian Olier
 
 \vspace{15.1pt}
 
@@ -154,7 +154,7 @@ Convolutional neural networks (CNNs) that classify red blood cells as malaria-in
 
 Malaria caused an estimated 282 million cases and 610,000 deaths in 2024 \citep{who2025}. Diagnosis still relies on a trained microscopist reading a stained blood smear \citep{rajaraman2018}, and many remote areas have limited access to good-quality microscopy \citep{whordt}. Automated cell classification could help, if it stays accurate across laboratories.
 
-The task is binary classification of single red-blood-cell images as parasitised or uninfected. Pretrained convolutional neural networks (CNNs) are trained on the NIH dataset and tested on two external datasets, BBBC041 and MP-IDB. The drop is the loss in sensitivity or specificity relative to held-out NIH patients. Stakeholders are analysed in the \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report.md}{ELSA report}.
+The task is binary classification of single red-blood-cell images as parasitised or uninfected. Pretrained convolutional neural networks (CNNs) are trained on the NIH dataset and tested on two external datasets, BBBC041 and MP-IDB. The drop is the loss in sensitivity or specificity relative to held-out NIH patients. Stakeholders are analysed in the \href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report_v3.md}{ELSA report}.
 
 \textbf{MRQ.} To what extent do pretrained CNNs trained to classify NIH single-cell images as parasitised or uninfected lose sensitivity on BBBC041 and MP-IDB, and specificity on BBBC041, relative to a patient-grouped NIH hold-out set, and which dataset differences explain this drop?
 
@@ -296,13 +296,13 @@ Seed variation is small on NIH and large on the external sets: the NIH values va
 
 \subsection{Strengths and weaknesses}
 
-The comparisons are fair by design: one split, identical settings, the same cells and threshold for every model and test input, paired intervals and three seeds. Every table can be rebuilt with one command, without a GPU. The weaknesses limit how far the conclusions reach. Corrections are applied only at test time, so the study cannot say whether training with colour augmentation, on masked cells or on labelled target images would remove the drop; these change the model, which RQ2 holds fixed. The fixed threshold of 0.5 mixes errors in ranking with errors in where the threshold sits, which the AUC only partly separates. The other-species group has only 140 cells, and the Grad-CAM check covers only the first training run and 100 cells per group. On BBBC041 the species and the laboratory change together, so its drop cannot be divided between them. MP-IDB has no uninfected cells, so a sensitivity gain there cannot be checked against false alarms. Colour was matched only on masked crops, so colour alone was not tested. Training settings were fixed, so the architecture ranking holds for these settings only.
+The comparisons are fair by design: one split, identical settings, the same cells and threshold for every model and test input, paired intervals and three seeds. Every report table is rebuilt by \texttt{make report}, without a GPU. The weaknesses limit how far the conclusions reach. Corrections are applied only at test time, so the study cannot say whether training with colour augmentation, on masked cells or on labelled target images would remove the drop; these change the model, which RQ2 holds fixed. The fixed threshold of 0.5 mixes errors in ranking with errors in where the threshold sits, which the AUC only partly separates. The other-species group has only 140 cells, and the Grad-CAM check covers only the first training run and 100 cells per group. On BBBC041 the species and the laboratory change together, so its drop cannot be divided between them. MP-IDB has no uninfected cells, so a sensitivity gain there cannot be checked against false alarms. Colour was matched only on masked crops, so colour alone was not tested. Training settings were fixed, so the architecture ranking holds for these settings only.
 
 \section{Conclusion, limitations and future work}
 
 CNNs trained on NIH single cells lose much of their sensitivity on BBBC041 and MP-IDB (up to 63 pp on average) and up to 20 pp of specificity on BBBC041, yet generalise well to unseen NIH patients. The lighter \mbox{MobileNetV2} loses the most sensitivity, not the least. Matching crop format and stain colour at test time does not improve mean AUC, so these two differences, corrected this way, do not explain the drop. Rings form the largest share of misses in five of six model and site pairs, and \emph{P. falciparum} is detected less often than other species. The contribution is a controlled test-time ablation of two suspected causes, and a share-recovered measure that exposes recovery driven by the threshold.
 
-The results rest on one source dataset, three seeds and fixed training settings. A laboratory using \mbox{MobileNetV2} at site\_b would miss most infected cells (sensitivity 38\%), so an NIH-trained model needs local validation before use (\href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report.md}{ELSA report}). On site\_b AUC falls far less than sensitivity, so the threshold could be re-set on a few labelled local cells, which the saved predictions can test without retraining. Test-time colour matching failed, so stain augmentation or a learned normaliser such as BeerLaNet \citep{xu2025} should be tried during training. Training data should come from several laboratories and hold more ring-stage cells.
+The results rest on one source dataset, three seeds and fixed training settings. A laboratory using \mbox{MobileNetV2} at site\_b would miss most infected cells (sensitivity 38\%), so an NIH-trained model needs local validation before use (\href{https://gitlab.uvt.nl/capstone/2026-fall/u927271/-/blob/main/docs/elsa_report_v3.md}{ELSA report}). On site\_b AUC falls far less than sensitivity, so the threshold could be re-set on a few labelled local cells, which the saved predictions can test without retraining. Test-time colour matching failed, so stain augmentation or a learned normaliser such as BeerLaNet \citep{xu2025} should be tried during training. Training data should come from several laboratories and hold more ring-stage cells.
 
 \printbibliography[heading=ctbib,title=References]
 
