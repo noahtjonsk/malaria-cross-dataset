@@ -1,0 +1,227 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[american]{babel}
+\usepackage{textcomp}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{enumitem}
+\setlist{itemsep=1pt,parsep=0pt,topsep=3pt}
+\usepackage{float}
+\usepackage{fancyvrb}
+\usepackage{ragged2e}
+\usepackage[nochapters,beramono,eulermath,pdfspacing,dottedtoc]{classicthesis}
+
+% type area (matches the DSS classicthesis template and the literature review)
+\areaset[current]{440pt}{670pt}
+\setlength{\footskip}{21pt}
+\addtolength{\voffset}{48.4pt}
+\setlength{\marginparwidth}{7em}
+\setlength{\marginparsep}{2em}
+
+\newcommand{\myTitle}{Cross-Dataset Generalisation of Deep Learning for Malaria Classification in Microscopy Images}
+\newcommand{\myName}{Noah Tjon Sien Kie}
+\newcommand{\myStudentNumber}{2103939}
+\newcommand{\myCommittee}{Dr.\ Sharon Ong and Dr.\ Richard Heersmink}
+\newcommand{\myDate}{25 November 2026}
+\newcommand{\myStage}{Deliverable D5, Capstone Portfolio}
+\newcommand{\repourl}{https://gitlab.uvt.nl/capstone/2026-fall/u927271}
+
+\usepackage{scrextend}
+\newlength{\titlelogoskip}\setlength{\titlelogoskip}{-49.6pt}
+\newlength{\titlegapA}\setlength{\titlegapA}{141.8pt}
+\newlength{\titlegapB}\setlength{\titlegapB}{65pt}
+\newlength{\titlegapC}\setlength{\titlegapC}{33pt}
+\newlength{\bodytitleskip}\setlength{\bodytitleskip}{23.1pt}
+\newlength{\bodygapA}\setlength{\bodygapA}{31.4pt}
+\newlength{\bodygapB}\setlength{\bodygapB}{13.6pt}
+\newlength{\backindent}\setlength{\backindent}{24pt}
+\newlength{\backtopskip}\setlength{\backtopskip}{-15.7pt}
+
+\definecolor{ctcite}{rgb}{0.05,0.05,0.50}
+\hypersetup{colorlinks=true, linkcolor=ctcite, citecolor=ctcite, urlcolor=ctcite,
+  pdftitle={\myTitle: ELSA Report}, pdfauthor={\myName}, breaklinks=true}
+
+\usepackage[style=apa,backend=biber,natbib=true]{biblatex}
+\DeclareLanguageMapping{american}{american-apa}
+\addbibresource{refs.bib}
+\defbibheading{ctbib}[References]{%
+  \section*{\spacedlowsmallcaps{#1}}%
+  \markright{\spacedlowsmallcaps{#1}}}
+
+\setlength{\LTcapwidth}{\linewidth}
+\setlength{\emergencystretch}{3em}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+
+\begin{document}
+\frenchspacing
+\raggedbottom
+\pagestyle{empty}
+
+\begin{titlepage}
+  \begin{center}
+    \vspace*{\titlelogoskip}
+    \includegraphics[width=167pt]{tilburg-logo}
+    \vspace{\titlegapA}
+
+    {\huge\rmfamily\normalfont\spacedallcaps{\myTitle}\par}
+    \vspace{\titlegapB}
+    {\normalsize\spacedlowsmallcaps{\myName}\par}
+    \vspace{\titlegapC}
+    {\footnotesize\spacedlowsmallcaps{ELSA Report}\par}
+    \vspace{4pt}
+    {\footnotesize\spacedlowsmallcaps{Capstone Project, MSc Data Science \& Society, Tilburg University}\par}
+    \vfill
+  \end{center}
+\end{titlepage}
+
+\thispagestyle{empty}
+\begin{addmargin}[\backindent]{0pt}
+\noindent
+\vspace*{\backtopskip}
+
+\noindent\spacedlowsmallcaps{Student Number}
+
+\vspace{7.5pt}\noindent\myStudentNumber
+
+\vspace{15.1pt}
+
+\noindent\spacedlowsmallcaps{Supervisors}
+
+\vspace{7.5pt}\noindent\myCommittee
+
+\vspace{15.1pt}
+
+\noindent\spacedlowsmallcaps{Course}
+
+\vspace{7.5pt}\noindent Capstone Project, MSc Data Science \& Society, Tilburg University
+
+\vspace{15.1pt}
+
+\noindent\spacedlowsmallcaps{Location}
+
+\vspace{7.5pt}\noindent Tilburg University\\
+School of Humanities and Digital Sciences\\
+Tilburg, The Netherlands
+
+\vspace{15.1pt}
+
+\noindent\spacedlowsmallcaps{Date}
+
+\vspace{7.5pt}\noindent\myDate\ (\myStage)
+
+\vspace{15.1pt}
+
+\noindent\spacedlowsmallcaps{Repository}
+
+\vspace{7.5pt}\noindent\url{\repourl}
+\end{addmargin}
+
+\clearpage
+\pagestyle{scrheadings}
+\rofoot[{\small\thepage}]{}
+\setcounter{page}{1}
+\thispagestyle{plain}
+
+\begin{center}
+  \vspace*{\bodytitleskip}
+  {\LARGE\rmfamily\normalfont\spacedallcaps{ELSA Report}\par}
+  \vspace{\bodygapA}
+  {\normalsize\spacedlowsmallcaps{\myName}\par}
+  \vspace{\bodygapB}
+\end{center}
+
+\section{Societal relevance and stakeholders}
+
+Malaria is a blood disease caused by a parasite that mosquitoes transmit when they bite. It is commonly diagnosed with a microscope: a drop of blood is spread on a glass slide and stained to make the parasites visible, and a trained microscopist examines the cells. The accuracy of this examination depends on the microscopist's expertise, and the work is arduous at scale \citep{rajaraman2018}. In 2024, malaria caused an estimated 282 million cases and 610,000 deaths \citep{who2025}. About 95\% of both were in the WHO African Region, where about three quarters of the deaths were children under five \citep{whomalaria}.
+
+Software that learns from labelled cell photos to sort red blood cells into infected and healthy could support scarce microscopists. Published programs reach near-perfect scores \citep{rajaraman2018} on a public collection of cell photos from one hospital in Bangladesh, released by the US National Institutes of Health (NIH). This project asks whether such a score holds in another laboratory. I trained three image-recognition neural networks of increasing size (\mbox{MobileNetV2}, ResNet-50 and VGG-16) on NIH photos and tested them, without further training, on two external datasets (collections of labelled photos from other laboratories), BBBC041 and MP-IDB. I trained each network three times, because training involves chance. On NIH patients the networks had not seen, they detect 97 to 98 of every 100 infected cells (sensitivity) and correctly clear 97 to 98 of every 100 healthy cells (specificity). On MP-IDB, the smallest network detects on average only 34 of every 100 infected cells of the species it was trained on, \emph{Plasmodium falciparum}. A near-perfect score in one hospital therefore says little about another.
+
+{\small
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{110.3pt}>{\raggedright\arraybackslash}p{305.7pt}@{}}
+\toprule
+Stakeholder & What is at stake for them \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+Patients & Missed infections go untreated; false alarms bring needless medicine. \\
+Microscopists & They may come to trust the tool even when it is wrong, known as automation bias \citep{goddard2012}. \\
+Clinics, funders, regulators & They decide on buying and approving such tools, and need evidence that a tool works where it will be used. \\
+Researchers & They can reuse the test procedure and the code. \\
+\end{longtable}}
+\addtocounter{table}{-1}
+
+\section{ELSA analysis, mitigation and results}
+
+The issues below, each with a planned mitigation, come from my ethics checklist, which I adapted from deon, a published ethics checklist for data scientists \citep{deon}.
+
+\subsection{Data: fit, quality and representativeness}
+
+The NIH dataset comes from one hospital in Bangladesh, with one staining method (the dye and how it is applied), one camera setup and one parasite species, \emph{P. falciparum}. BBBC041 has another species, \emph{P. vivax}, from Brazil and Southeast Asia, photographed in two batches (A and B). MP-IDB has four species from one Swiss laboratory and no healthy cells.
+
+A model takes on the biases of its training data \citep{johnson2021}, here the stain, camera and species of one hospital. I therefore report results for each dataset separately, which keeps a strong one from hiding a weak one. The data support claims about public datasets only, not about use in clinics. Two limits remain. First, the networks were never tested on photos from the WHO African Region, where 95\% of malaria cases and deaths occur. Second, BBBC041 differs from NIH in both species and laboratory, which means its lower scores cannot be attributed to either alone.
+
+\subsection{Ethics and law}
+
+No new data were collected. The images are public and anonymous: NIH patients appear only as a code, used solely to keep each patient's cells together, and consent was obtained by the original studies. Privacy protects people's control over information about themselves \citep{veliz2020}. As no one can be identified from these images, the EU's data-protection law, the GDPR (Regulation (EU) 2016/679, \citealp{gdpr2016}), does not apply. The EU's AI Act, which sets rules for AI systems according to their risk, exempts systems built solely for research (Regulation (EU) 2024/1689, Art.~2(6), \citealp{aiact2024}). The licences are respected (BBBC041: CC BY-NC-SA 3.0, sharing with credit but not for profit; NIH: use with credit; MP-IDB: MIT, permissive): only code, tables and a sample of 340 cell images are shared.
+
+Sold as a product, software that examines blood to support a diagnosis would be an in vitro diagnostic medical device, a test on a sample taken from the body (Regulation (EU) 2017/746, \citealp{ivdr2017}; \citealp{mdcg2019}), and a malaria test falls in a risk class that requires a check by an independent notified body before sale. Because of this check, the AI Act classifies such software as high-risk, the strictest category still allowed on the market (Art. 6(1)). From August 2028 (Regulation (EU) 2026/1744, \citealp{omnibus2026}), such a system needs training data that reflect its setting of use (Art. 10(4)) and human oversight against automation bias (Art. 14(4)(b)). The device regulation also requires clinical evidence (Art. 56), which this project lacks.
+
+\subsection{Bias: found, tested, mitigated}
+
+{\small
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{101.1pt}>{\raggedright\arraybackslash}p{95.2pt}>{\raggedright\arraybackslash}p{207.7pt}@{}}
+\toprule
+Issue & What I did & What was found \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+One patient in training and test data makes the test a memory test & Split the data by patient, checked before every run & Training, validation and test scores agree within 1.2 percentage points \\
+Half the training cells are infected; in BBBC041, 3 to 5\% & Reported missed infections and false alarms separately & Largest network, batch A: finds 96\% of infected cells, but only 1 in 9 of its ``infected'' calls is right \\
+An average can hide a group on which the model fails & Reported results per batch, species and life stage & \emph{P. falciparum} found less often than the other species in 8 of 9 runs; rings (youngest stage) less often than trophozoites (next stage) in all 9 runs on batch A and 6 of 9 on B \\
+\end{longtable}}
+\addtocounter{table}{-1}
+
+Fairness asks whether a tool makes more errors for some groups of patients than for others. The groups compared here consist of parasites and photographs, but they stand for patients. Malaria parasites come in several species, which look different and prevail in different regions. A life stage is a phase of growth inside the red blood cell; rings are the youngest and the hardest to see. A batch is a set of photos taken in one session with one stain and camera. Gaps between species or batches are therefore gaps between patients in different regions or laboratories. Fairness by sex, age or ethnicity could not be checked, as no dataset records them; this is a limitation, not evidence of fairness.
+
+I measured fairness as equal opportunity \citep{hardt2016}: an infected cell should have the same chance of detection, whatever its group. That chance is the sensitivity, which matters most because a missed infection leaves a patient untreated. By this measure, no network is fair. Infected cells were detected 97 to 98 times in 100 for new NIH patients, but only 34 to 65 times for \emph{P. falciparum} on MP-IDB. False alarms, which equal opportunity leaves aside, could be compared only between the BBBC041 batches, as MP-IDB has no healthy cells. The networks trade one error for the other: VGG-16 loses the least sensitivity on every external dataset but raises the most false alarms on batch A (specificity 77\%), whereas \mbox{MobileNetV2} misses the most infections, about six in ten on batch B.
+
+To keep my choices from biasing the results, I fixed every setting on NIH data, the same for all three networks, before any external test. Chance still mattered. Across three training runs, one network correctly cleared 66 to 84 of every 100 healthy cells on batch A.
+
+These steps made the measurement fair, but not the networks. To make the external photos look more like NIH photos, I removed their background and matched their colours to NIH. Neither correction improved, on average, how well the networks separate infected from healthy cells. Detection therefore remains less reliable outside NIH, a bias the corrections did not remove.
+
+\subsection{Transparency and explainability}
+
+A network with millions of weights, the numbers it learns from examples, cannot be read like a rule \citep{burrell2016}. A laboratory user therefore cannot see why a cell was called infected or judge whether to trust the call. What can be made transparent is the process: the code, settings, data split and random seeds are public.
+
+Heat maps made with Grad-CAM \citep{selvaraju2017} colour the parts of a photo that drove a decision. On single cells they show that the networks mostly attend to the parasite, in missed cells as much as in detected ones, although the smallest network often produced empty maps for its misses. The failures thus appear to lie in recognising the parasite, not in a shortcut such as relying on the background. A heat map cannot, however, tell a microscopist why a particular call is wrong.
+
+\section{Personal stance: should this be implemented?}
+
+The study achieved what it set out to do. With public data, no new patients and three and a half hours of free cloud computing, it showed that a near-perfect score did not carry over to photos from other laboratories. Its public code lets any developer run the same check.
+
+A reliable tool would still be valuable in the WHO African Region, where microscopists are often few, and a small network such as \mbox{MobileNetV2} could run in a low-resource clinic.
+
+No model checked only on NIH data, including these, should be used on patients.
+
+\begin{enumerate}
+\item The errors are large and unpredictable: which failure a clinic meets depends on the network and even on chance in training, which the NIH score hides.
+\item Patients in the WHO African Region are absent from the data, and the networks detect \emph{P. falciparum}, the species they were trained on, least well.
+\item Through automation bias, a confident wrong answer could override a correct human reading.
+\item The headline figure invites misuse: 97 to 98\% holds only for the training hospital, yet it could be cited to justify use in untested laboratories or in place of the microscopist.
+\end{enumerate}
+
+Deployment would be technically feasible and inexpensive, but these models could not meet the legal duties of Section 2.2. A trustworthy tool remains within reach if three groups act: developers train on photos from many laboratories and regions, including the WHO African Region, and report results per site; laboratories test the tool on their own slides, set their own cut-off score above which a cell counts as infected, and have a microscopist confirm every call; and regulators require evidence from several sites and a re-check whenever the stain or camera changes.
+
+\printbibliography[heading=ctbib,title=References]
+
+\end{document}
