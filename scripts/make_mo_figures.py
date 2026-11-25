@@ -145,6 +145,120 @@ STAGES_V4 = [
 ]
 
 
+# Technical Report v2 (after the formative feedback): the agreed terms (masking, colour
+# matching) and Grad-CAM as RQ4 instead of an appendix check. Letters as in v4.
+STAGES_V5 = [
+    ("Data preparation (A-D)", [
+        ("A", "Raw data", "NIH: 27,558 cells,\n200 patients\nBBBC041: 1,328 photos\nMP-IDB: 210 photos", False),
+        ("B", "Cell crops", "one manifest schema\nsquare, +10% padding\nMP-IDB on host cell\nbuild_crops.py", False),
+        ("C", "Patient split", "NIH 70/15/15,\ngrouped by patient\nnih_split.csv\nsplits.py", False),
+        ("D", "EDA", "background, brightness\nand colour differences\n03_eda_short.ipynb", False)]),
+    ("Models (RQ1) and test-image preprocessing (RQ2) (E, F)", [
+        ("E", "Fine-tune on NIH", "VGG-16, ResNet-50,\nMobileNetV2, seeds 0-2;\nall layers, early stop\ntrain.py", False),
+        ("F1", "Masking", "Otsu threshold on\nbrightness; external\ntest crops only\nbuild_masked_crops.py", False, False),
+        ("F2", "Colour matching", "on masked crops:\nReinhard transfer or\nhistogram matching\nbuild_colour_crops.py", False)]),
+    ("Scoring and evaluation (G, H; RQ4: I)", [
+        ("G", "Inference", "fixed weights; 9 runs\nx 4 test-image versions,\n0.5 threshold\nevaluate.py", False),
+        ("H1", "Metrics", "per run: RQ1-RQ3,\ndrop, share recovered,\n95% intervals\nsummarise_results.py", False),
+        ("H2", "Across seeds", "mean and range, paired\nmodel comparison\naggregate_seeds.py", False),
+        ("I", "Grad-CAM", "RQ4; seed-0 models;\nshare in the cell and\non the parasite\ngradcam.py", False, False)]),
+]
+
+
+def pipeline_v5() -> None:
+    """The pipeline for Technical Report v2: agreed terms, Grad-CAM as RQ4."""
+    letters = [b[0] for _, boxes in STAGES_V5 for b in boxes]
+    assert len(letters) == len(set(letters)), f"repeated stage letter in {letters}"
+    pipeline_figure(STAGES_V5, "pipeline_v5.png", "every stage implemented; letters are used in the text")
+
+
+EXAMPLE_ROWS = [  # row label, [(dataset, source_split, label, stage or None, caption)]
+    ("NIH (training)", [("nih", "train", 1, None, "parasitised"), ("nih", "train", 1, None, "parasitised"),
+                        ("nih", "train", 0, None, "uninfected"), ("nih", "train", 0, None, "uninfected")]),
+    ("BBBC041 site_a", [("bbbc041", "site_a", 1, None, "parasitised"), ("bbbc041", "site_a", 1, None, "parasitised"),
+                        ("bbbc041", "site_a", 0, None, "uninfected"), ("bbbc041", "site_a", 0, None, "uninfected")]),
+    ("BBBC041 site_b", [("bbbc041", "site_b", 1, None, "parasitised"), ("bbbc041", "site_b", 1, None, "parasitised"),
+                        ("bbbc041", "site_b", 0, None, "uninfected"), ("bbbc041", "site_b", 0, None, "uninfected")]),
+    ("MP-IDB species", [("mpidb_wholecell", "Falciparum", 1, None, "P. falciparum"),
+                        ("mpidb_wholecell", "Vivax", 1, None, "P. vivax"),
+                        ("mpidb_wholecell", "Ovale", 1, None, "P. ovale"),
+                        ("mpidb_wholecell", "Malariae", 1, None, "P. malariae")]),
+    ("BBBC041 life stages", [("bbbc041", None, 1, "ring", "ring"), ("bbbc041", None, 1, "trophozoite", "trophozoite"),
+                             ("bbbc041", None, 1, "schizont", "schizont"),
+                             ("bbbc041", None, 1, "gametocyte", "gametocyte")]),
+]
+
+
+def dataset_examples(seed: int = 7) -> None:
+    """Example cells per dataset as the models receive them, and the four BBBC041 life stages."""
+    from malaria.data import nih_cells
+    sets = {"nih": nih_cells("train"), "bbbc041": test_cells("bbbc041", "raw"),
+            "mpidb_wholecell": test_cells("mpidb_wholecell", "raw")}
+    plots.set_style()
+    fig, axes = plt.subplots(len(EXAMPLE_ROWS), 4, figsize=(5.6, 1.55 * len(EXAMPLE_ROWS)))
+    for r, (row_label, cells) in enumerate(EXAMPLE_ROWS):
+        used = set()
+        for c, (d, split, label, stage, caption) in enumerate(cells):
+            t = sets[d]
+            pick = t[t["label_binary"] == label]
+            if split is not None and d != "nih":
+                pick = pick[pick["source_split"] == split]
+            if stage is not None:
+                pick = pick[pick["stage"] == stage]
+            pick = pick[~pick["cell_id"].isin(used)]
+            row = pick.sample(1, random_state=seed + r).iloc[0]
+            used.add(row["cell_id"])
+            ax = axes[r, c]
+            ax.imshow(load_input(row["path"], 160))
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.grid(False)
+            ax.set_xlabel(caption, fontsize=7, color=INK_2, style="italic" if caption.startswith("P.") else "normal")
+            if c == 0:
+                ax.set_ylabel(row_label, fontsize=7.5, color=INK)
+    fig.tight_layout()
+    fig.savefig(OUT / "dataset_examples.png", dpi=200)
+    plt.close(fig)
+    print(f"wrote {OUT / 'dataset_examples.png'}")
+
+
+def share_recovered() -> None:
+    """Schematic of the share-recovered measure, with illustrative values (not results)."""
+    nih, raw, after = 97.0, 57.0, 77.0
+    plots.set_style()
+    fig, ax = plt.subplots(figsize=(5.2, 2.9))
+    xs = [0, 1, 2]
+    ax.bar(xs, [nih, raw, after], width=0.5, color=SERIES[0], zorder=2)
+    for x, v, name in zip(xs, [nih, raw, after],
+                          ["NIH hold-out", "External set,\nraw test images", "External set,\nafter masking"]):
+        ax.text(x, v + 1.5, f"{v:.0f}%", ha="center", va="bottom", fontsize=8, color=INK)
+    ax.set_xticks(xs, ["NIH hold-out", "External set,\nraw test images", "External set,\nafter masking"],
+                  fontsize=7.5, color=INK_2)
+    ax.set_ylim(0, 112)
+    ax.set_ylabel("sensitivity (%)", fontsize=8, color=INK_2)
+    ax.tick_params(axis="y", labelsize=7, colors=INK_2)
+    ax.grid(axis="x", visible=False)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+
+    def bracket(x, lo, hi, text):
+        """A vertical bracket from lo to hi at x with a label to its right."""
+        ax.annotate("", xy=(x, lo), xytext=(x, hi),
+                    arrowprops=dict(arrowstyle="<->", color=INK_2, lw=1, shrinkA=0, shrinkB=0))
+        ax.text(x + 0.06, (lo + hi) / 2, text, fontsize=7.5, color=INK, va="center")
+
+    ax.hlines([nih], 0.25, 1.62, colors=MUTED, lw=0.8, ls=(0, (3, 2)))
+    ax.hlines([raw], 1.25, 2.42, colors=MUTED, lw=0.8, ls=(0, (3, 2)))
+    bracket(1.45, raw, nih, f"drop\n{nih - raw:.0f} pp")
+    bracket(2.42, raw, after, f"recovered\n{after - raw:.0f} pp")
+    ax.text(2.0, 104, f"share recovered = {after - raw:.0f} / {nih - raw:.0f} = {(after - raw) / (nih - raw):.2f}",
+            fontsize=8, color=INK, ha="center")
+    fig.tight_layout()
+    fig.savefig(OUT / "share_recovered.png", dpi=200)
+    plt.close(fig)
+    print(f"wrote {OUT / 'share_recovered.png'}")
+
+
 def pipeline_figure(stages=STAGES, name: str = "pipeline_v3.png",
                     key: str = "solid box = implemented    dashed grey box = planned") -> None:
     """The pipeline grouped by research question; solid = implemented, dashed = planned."""
@@ -213,7 +327,8 @@ def copy_eda() -> None:
 
 FIGURES = {"eda_copies": copy_eda, "rq2_variants": variants_figure,
            "training_curves": training_curves, "pipeline_v3": pipeline_figure,
-           "pipeline_v4": pipeline_v4}
+           "pipeline_v4": pipeline_v4, "pipeline_v5": pipeline_v5,
+           "dataset_examples": dataset_examples, "share_recovered": share_recovered}
 
 
 def main() -> None:

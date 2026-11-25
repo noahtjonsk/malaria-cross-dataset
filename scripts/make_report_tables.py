@@ -20,9 +20,17 @@ Writes outputs/tables/
     report_rq3.{csv,md}                RQ3: species gap, ring vs trophozoite miss rates
     report_compute.{csv,md}            parameters, epochs, best epoch, training time per architecture
     report_settings.md                 the training settings shared by all nine runs
+    report_gradcam_parasite.{csv,md}   RQ4: Grad-CAM share on the annotated MP-IDB parasite, hits vs misses
+    report_gradcam_cell.{csv,md}       RQ4: Grad-CAM share inside the BBBC041 cell, raw vs masked
+    report_data.{csv,md}               cells, photographs and image sizes per dataset and subset, and
+    report_stages.{csv,md}             BBBC041 parasitised cells per life stage; both need
+                                       the local per-cell statistics and raw datasets, so a clean clone
+                                       skips them and keeps the committed tables
 and outputs/figures/
     report_rq1_drop.png                drop per architecture and test set (mean and seed range)
     report_rq2_tradeoff.png            sensitivity against specificity per test-input variant
+    report_rq1_drop_v2.png             TR v2 Figure 5: drop per metric panel, bars per architecture
+    report_rq2_variants_v2.png         TR v2 Figure 6: value per test-image version, BBBC041 site x metric
 """
 import json
 import sys
@@ -36,6 +44,7 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.patches import Patch  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
@@ -335,6 +344,106 @@ def compute_table() -> None:
     print("wrote report_settings.md")
 
 
+def pct_ci(row: pd.Series, col: str) -> str:
+    """'mean [low, high]' x100 for a Grad-CAM share and its bootstrap interval over cells."""
+    return fmt(100 * row[col], 100 * row[f"{col}_ci_low"], 100 * row[f"{col}_ci_high"], 0)
+
+
+def gradcam_tables() -> None:
+    """RQ4 tables from scripts/gradcam.py (seed 0, 100 cells per group): where the evidence lies."""
+    g = pd.read_csv(paths.TABLES / "gradcam_heat_share.csv")
+    groups = {"mpidb/falciparum": "P. falciparum", "mpidb/other": "Other species"}   # italicised by to_markdown
+    rows = []
+    for arch in ARCHS:
+        for group, label in groups.items():
+            for outcome in ("hit", "miss"):
+                r = g[(g.arch == arch) & (g.group == group) & (g.variant == "raw") & (g.outcome == outcome)]
+                assert len(r) == 1, (arch, group, outcome)
+                r = r.iloc[0]
+                rows.append({"Model": LABELS[arch], "Species": label,
+                             "Outcome": {"hit": "Detected", "miss": "Missed"}[outcome],
+                             "Cells": int(r["n_cells"]), "Empty maps": int(r["n_zero_maps"]),
+                             "Share on parasite (%)": pct_ci(r, "heat_parasite"),
+                             "Parasite area (%)": f"{100 * r['area_parasite']:.0f}"})
+    md = pd.DataFrame(rows)
+    write("report_gradcam_parasite", g[g.group.isin(groups)], md)
+
+    rows = []
+    for arch in ARCHS:
+        for group in ("bbbc041/site_a", "bbbc041/site_b"):
+            for variant in ("raw", "masked"):
+                r = g[(g.arch == arch) & (g.group == group) & (g.variant == variant) & (g.outcome == "all")]
+                assert len(r) == 1, (arch, group, variant)
+                r = r.iloc[0]
+                rows.append({"Model": LABELS[arch], "Test set": SETS_SHORT[group],
+                             "Input": VARIANT_SHORT[variant], "Empty maps": int(r["n_zero_maps"]),
+                             "Share inside the cell (%)": pct_ci(r, "heat_cell"),
+                             "Cell area (%)": f"{100 * r['area_cell']:.0f}"})
+    write("report_gradcam_cell", g[g.group.str.startswith("bbbc041")], pd.DataFrame(rows))
+
+
+def data_table() -> None:
+    """Cells, photographs and image sizes per dataset and subset (needs local data; else skipped)."""
+    import json
+    from PIL import Image
+    stats = paths.TABLES / "cell_stats.csv"
+    whole = paths.TABLES / "cell_stats_mpidb_wholecell.csv"
+    if not (stats.exists() and whole.exists() and paths.MPIDB_DIR.exists()
+            and all(p.exists() for p in paths.BBBC041_JSON.values())):
+        print("report_data skipped: needs the local cell_stats tables and raw datasets")
+        return
+    d = pd.read_csv(stats, low_memory=False)
+    w = pd.read_csv(whole, low_memory=False)
+    split = pd.read_csv(paths.MANIFESTS / "nih_split.csv")
+    nih = d[d.dataset == "nih"].merge(split[["cell_id", "split"]], on="cell_id", validate="one_to_one")
+    assert len(nih) == 27558
+
+    def side(x: pd.DataFrame) -> str:
+        """Median crop side with the 5th-95th percentile, in pixels."""
+        s = x[["w", "h"]].max(axis=1)
+        return f"{s.median():.0f} [{s.quantile(.05):.0f}, {s.quantile(.95):.0f}]"
+
+    # Short cells only: the report builder keeps a numeric cell on one line, so a long one
+    # would run into the next column. The BBBC041 life stages get their own table.
+    rows = []
+    for key, label in (("train", "training"), ("val", "validation"), ("test", "hold-out")):
+        x = nih[nih.split == key]
+        # NIH is resampled by patient; its photographs are not a unit anywhere in the report
+        rows.append({"Subset": f"NIH {label}", "Units": f"{x.patient_id.nunique()} patients",
+                     "Parasitised": f"{int(x.label_binary.sum()):,}",
+                     "Uninfected": f"{int((x.label_binary == 0).sum()):,}",
+                     "Photograph size (px)": "-", "Crop side (px)": side(x)})
+    stages = {"ring": "Ring", "trophozoite": "Trophozoite", "schizont": "Schizont", "gametocyte": "Gametocyte"}
+    stage_rows = {name: {"Life stage": name} for name in [*stages.values(), "All parasitised"]}
+    for site, f in paths.BBBC041_JSON.items():
+        x = d[(d.dataset == "bbbc041") & (d.source_split == site) & (d.eval_group == "primary")]
+        shapes = {(e["image"]["shape"]["c"], e["image"]["shape"]["r"]) for e in json.load(open(f))}
+        assert len(shapes) == 1, (site, shapes)
+        counts = x.stage.value_counts()
+        assert counts.reindex(list(stages)).sum() == x.label_binary.sum(), site
+        for s, name in stages.items():
+            stage_rows[name][site] = f"{int(counts.get(s, 0)):,}"
+        stage_rows["All parasitised"][site] = f"{int(x.label_binary.sum()):,}"
+        rows.append({"Subset": f"BBBC041 {site}", "Units": f"{x.source_image.nunique():,} photographs",
+                     "Parasitised": f"{int(x.label_binary.sum()):,}",
+                     "Uninfected": f"{int((x.label_binary == 0).sum()):,}",
+                     "Photograph size (px)": "{} x {}".format(*shapes.pop()), "Crop side (px)": side(x)})
+    for sp in paths.MPIDB_SPECIES:
+        x = w[w.species == sp]
+        sizes = {Image.open(p).size for p in (paths.MPIDB_DIR / sp / "img").glob("*")}
+        assert len(sizes) == 1, (sp, sizes)
+        # to_markdown() italicises "P. falciparum" itself; the other species are italicised here
+        name = f"P. {sp.lower()}"
+        rows.append({"Subset": "MP-IDB " + (name if sp == "Falciparum" else f"*{name}*"),
+                     "Units": f"{x.source_image.nunique()} photographs",
+                     "Parasitised": f"{len(x):,}", "Uninfected": "-",
+                     "Photograph size (px)": "{} x {}".format(*sizes.pop()), "Crop side (px)": side(x)})
+    t = pd.DataFrame(rows).rename(columns={"Units": "Patients or photographs"})
+    write("report_data", t, t)
+    st = pd.DataFrame(list(stage_rows.values()))
+    write("report_stages", st, st)
+
+
 # ------------------------------------------------------------ figures ---
 def drop_figure(cmp: pd.DataFrame) -> None:
     """Dot = mean drop over seeds, bar = lowest to highest seed, per external set and metric."""
@@ -421,6 +530,97 @@ def tradeoff_figure(rq2: pd.DataFrame, rq1: pd.DataFrame) -> None:
     print(f"wrote {out.relative_to(paths.ROOT).as_posix()}")
 
 
+TICKS = {"bbbc041/site_a": "BBBC041\nsite_a", "bbbc041/site_b": "BBBC041\nsite_b",
+         "mpidb/falciparum": "MP-IDB\nfalciparum", "mpidb/other": "MP-IDB\nother"}
+# the column headers of Table 6; "+" = applied to the masked crops
+VARIANT_TICKS = {"raw": "Raw", "masked": "Masked", "reinhard": "+\nReinhard", "histmatch": "+ Hist.\nmatching"}
+
+
+def grouped_bars(ax, groups: list, get, labels: dict) -> None:
+    """One cluster per group, one bar per architecture: bar = seed mean, whisker = lowest to highest seed."""
+    width = 0.26
+    for j, arch in enumerate(ARCHS):
+        for i, g in enumerate(groups):
+            mean, lo, hi = get(g, arch)
+            x = i + (j - 1) * width
+            ax.bar(x, mean, width * 0.92, color=COLOURS[arch], zorder=2, lw=0)
+            ax.plot([x, x], [lo, hi], color=INK, lw=0.9, zorder=3, solid_capstyle="butt")
+    ax.set_xticks(range(len(groups)))
+    ax.set_xticklabels([labels[g] for g in groups], fontsize=7)
+    ax.tick_params(axis="x", length=0, labelcolor=INK)
+    ax.tick_params(axis="y", labelcolor=INK_2, labelsize=7.5)
+    ax.grid(axis="x", visible=False)
+    ax.grid(axis="y", color=GRID, alpha=1, lw=0.6)
+    ax.axhline(0, color=INK_2, lw=0.8, zorder=1)
+    ax.set_xlim(-0.55, len(groups) - 0.45)
+
+
+def arch_legend(fig, y: float) -> None:
+    handles = [Patch(color=COLOURS[a], label=LABELS[a]) for a in ARCHS]
+    fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, y), ncol=3, fontsize=8,
+               handlelength=1.2, handleheight=0.8, columnspacing=1.6)
+
+
+def drop_figure_v2(cmp: pd.DataFrame) -> None:
+    """TR v2 Figure 5: one panel per metric, external sets on the x-axis, one bar per architecture."""
+    plots.set_style()
+    panels = [(m, [s for s in EXTERNAL if ((cmp["test_set"] == s) & (cmp["metric"] == m)).any()])
+              for m in METRICS]
+    # sensitivity (four sets) across the top; specificity and AUC (BBBC041 only) side by side below
+    fig = plt.figure(figsize=(5.0, 4.6))
+    grid = fig.add_gridspec(2, 2)
+    top = fig.add_subplot(grid[0, :])
+    axes = [top, fig.add_subplot(grid[1, 0], sharey=top), fig.add_subplot(grid[1, 1], sharey=top)]
+    for ax, (m, sets) in zip(axes, panels):
+        def get(s, arch, m=m):
+            x = cmp[(cmp["test_set"] == s) & (cmp["metric"] == m) & (cmp["arch"] == arch)].iloc[0]
+            return x["drop_pp_mean"], x["drop_pp_min"], x["drop_pp_max"]
+        grouped_bars(ax, sets, get, TICKS)
+        ax.set_title(f"{METRICS[m]} drop", color=INK, fontsize=9)
+    axes[2].tick_params(axis="y", labelleft=False)
+    for ax in axes[:2]:
+        ax.set_ylabel("drop (pp)\nhigher = worse", color=INK_2, fontsize=8)
+    arch_legend(fig, 1.0)
+    fig.tight_layout()
+    out = paths.FIGURES / "report_rq1_drop_v2.png"
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out.relative_to(paths.ROOT).as_posix()}")
+
+
+def rq2_figure_v2(rq2: pd.DataFrame, rq1: pd.DataFrame) -> None:
+    """TR v2 Figure 6: per BBBC041 site (columns) and metric (rows), value per test-image version."""
+    plots.set_style()
+    sites = ("bbbc041/site_a", "bbbc041/site_b")
+    fig, axes = plt.subplots(3, 2, figsize=(5.0, 5.4), sharey=True, sharex=True)
+    nih = rq1[rq1["test_set"] == "nih_test"].groupby("metric")["value_mean"].mean()
+    for r, m in enumerate(METRICS):
+        for c, site in enumerate(sites):
+            ax = axes[r, c]
+            t = rq2[(rq2["test_set"] == site) & (rq2["metric"] == m)].set_index(["variant", "arch"])
+
+            def get(var, arch, t=t):
+                x = t.loc[(var, arch)]
+                return 100 * x["value_mean"], 100 * x["value_min"], 100 * x["value_max"]
+            grouped_bars(ax, list(VARIANTS), get, VARIANT_TICKS)
+            ax.axhline(100 * nih[m], color=INK_2, lw=1, ls=(0, (4, 2)), zorder=4)
+            if c == 1:
+                ax.text(3.45, 100 * nih[m] + 2, "NIH hold-out", ha="right", va="bottom", fontsize=7,
+                        color=INK_2, zorder=5, bbox={"fc": "white", "ec": "none", "pad": 0.5, "alpha": 0.8})
+            ax.set_ylim(0, 112)
+            ax.set_yticks([0, 25, 50, 75, 100])
+            if r == 0:
+                ax.set_title(SETS[site], color=INK, fontsize=9)
+            if c == 0:
+                ax.set_ylabel(f"{METRICS[m]} (%)" if m != "auc" else "AUC (× 100)", color=INK_2, fontsize=8)
+    arch_legend(fig, 1.0)
+    fig.tight_layout()
+    out = paths.FIGURES / "report_rq2_variants_v2.png"
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out.relative_to(paths.ROOT).as_posix()}")
+
+
 def main() -> None:
     """Build every report table and figure from the committed result tables."""
     paths.FIGURES.mkdir(parents=True, exist_ok=True)
@@ -435,8 +635,12 @@ def main() -> None:
     rq2_table(pooled["rq2"], runs["rq2"])
     rq3_table(pooled["rq3"], runs["rq3"], found)
     compute_table()
+    gradcam_tables()
+    data_table()
     drop_figure(cmp)
     tradeoff_figure(pooled["rq2"], pooled["rq1"])
+    drop_figure_v2(cmp)
+    rq2_figure_v2(pooled["rq2"], pooled["rq1"])
 
 
 if __name__ == "__main__":
